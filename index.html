@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🤝 LINK & PLAN — Planificador Estratégico de Ocio Compartido</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;0,700;1,300&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  :root {
+    --cream: #FAF7F2;
+    --ink: #1A1714;
+    --terracotta: #C4673A;
+    --sage: #6B8F71;
+    --sand: #E8DCC8;
+    --mist: #F0EDE8;
+    --gold: #C9A84C;
+    --rose: #D4847A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  h1, h2, h3, .display { font-family: 'Fraunces', serif; }
+  .nav-item { transition: all 0.2s ease; }
+  .nav-item.active { background: var(--ink); color: var(--cream); }
+  .nav-item:not(.active):hover { background: var(--sand); }
+  .tag { cursor: pointer; transition: all 0.15s ease; border: 1.5px solid #D5CFC5; }
+  .tag.selected { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+  .tag:not(.selected):hover { border-color: var(--terracotta); color: var(--terracotta); }
+  .card { background: white; border-radius: 16px; border: 1px solid #EAE4D9; transition: box-shadow 0.2s; }
+  .card:hover { box-shadow: 0 4px 24px rgba(26,23,20,0.08); }
+  .btn-primary { background: var(--ink); color: var(--cream); border-radius: 10px; padding: 10px 20px; font-weight: 500; transition: all 0.15s; }
+  .btn-primary:hover { background: var(--terracotta); transform: translateY(-1px); }
+  .btn-secondary { background: var(--sand); color: var(--ink); border-radius: 10px; padding: 10px 20px; font-weight: 500; transition: all 0.15s; }
+  .btn-secondary:hover { background: #DDD3BC; }
+  .btn-sage { background: var(--sage); color: white; border-radius: 10px; padding: 8px 16px; font-weight: 500; font-size:13px; transition: all 0.15s; }
+  .btn-sage:hover { background: #5a7a60; }
+  .section { display: none; }
+  .section.active { display: block; }
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(26,23,20,0.5); z-index:100; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  input, select, textarea {
+    border: 1.5px solid #DDD8D0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-family: 'DM Sans', sans-serif;
+    background: white;
+    width: 100%;
+    transition: border-color 0.15s;
+    outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--terracotta); }
+  .zone-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; background: var(--sand); color: var(--ink); }
+  .avail-dot { width:8px; height:8px; border-radius:50%; background:#22c55e; display:inline-block; margin-right:4px; box-shadow: 0 0 6px #22c55e88; }
+  .itinerary-block { border-left: 3px solid var(--sand); padding-left: 16px; }
+  .itinerary-block.morning { border-color: var(--gold); }
+  .itinerary-block.lunch { border-color: var(--terracotta); }
+  .itinerary-block.afternoon { border-color: var(--sage); }
+  .budget-bar { height:8px; border-radius:4px; background: var(--sand); overflow:hidden; }
+  .budget-fill { height:100%; background: var(--sage); border-radius:4px; transition: width 0.5s ease; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+  .slide-in { animation: slideIn 0.3s ease; }
+  @keyframes slideIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  .user-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0; }
+  .status-confirmed { background:#dcfce7; color:#15803d; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+  .json-viewer { font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.6; }
+  .json-key { color: var(--terracotta); }
+  .json-str { color: var(--sage); }
+  .json-num { color: var(--gold); }
+  table { border-collapse: collapse; width:100%; }
+  th { background: var(--mist); font-weight:600; text-align:left; padding:10px 12px; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; }
+  td { padding:10px 12px; border-bottom:1px solid #F0EDE8; font-size:13px; }
+  tr:hover td { background:#FDFBF8; }
+  .companion-chip { display:flex; align-items:center; gap:6px; background:var(--mist); border:1.5px solid #DDD8D0; border-radius:20px; padding:4px 12px; font-size:13px; cursor:pointer; transition:all 0.15s; }
+  .companion-chip.selected { background:var(--ink); color:var(--cream); border-color:var(--ink); }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR NAV -->
+<div class="flex min-h-screen">
+  <aside class="w-64 flex-shrink-0 border-r border-[#EAE4D9] bg-white flex flex-col" style="position:sticky;top:0;height:100vh;">
+    <div class="p-6 border-b border-[#EAE4D9]">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-2xl">🤝</span>
+        <span class="display text-xl font-semibold tracking-tight">Link & Plan</span>
+      </div>
+      <p class="text-xs text-[#9A9390] mt-1">Planificador de Ocio Compartido</p>
+    </div>
+    <nav class="flex-1 p-3 space-y-1">
+      <button onclick="showSection('usuarios')" class="nav-item active w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium" data-section="usuarios">
+        <i data-lucide="users" class="w-4 h-4"></i> Gestión de Usuarios
+      </button>
+      <button onclick="showSection('generar')" class="nav-item w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium" data-section="generar">
+        <i data-lucide="map" class="w-4 h-4"></i> Generar Plan
+      </button>
+      <button onclick="showSection('planes')" class="nav-item w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium" data-section="planes">
+        <i data-lucide="calendar-check" class="w-4 h-4"></i> Mis Planes y Reservas
+      </button>
+      <button onclick="showSection('datos')" class="nav-item w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium" data-section="datos">
+        <i data-lucide="database" class="w-4 h-4"></i> Panel de Datos
+      </button>
+    </nav>
+    <div class="p-4 border-t border-[#EAE4D9]">
+      <div class="text-xs text-[#B0ABA5] text-center">Madrid • MVP v1.0</div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="flex-1 overflow-auto">
+
+    <!-- ===== SECCIÓN 1: USUARIOS ===== -->
+    <div id="section-usuarios" class="section active p-8 slide-in">
+      <div class="max-w-5xl mx-auto">
+        <div class="flex items-center justify-between mb-8">
+          <div>
+            <h1 class="text-3xl font-semibold mb-1">Perfiles y Gustos</h1>
+            <p class="text-[#9A9390]">Crea y gestiona los perfiles de los participantes con sus preferencias</p>
+          </div>
+          <button onclick="openNewUserModal()" class="btn-primary flex items-center gap-2">
+            <i data-lucide="plus" class="w-4 h-4"></i> Nuevo Usuario
+          </button>
+        </div>
+        <div id="users-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+        <div id="no-users" class="hidden text-center py-20 text-[#B0ABA5]">
+          <i data-lucide="users" class="w-12 h-12 mx-auto mb-4 opacity-30"></i>
+          <p class="text-lg font-medium">Sin usuarios aún</p>
+          <p class="text-sm mt-1">Crea el primer perfil para comenzar</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SECCIÓN 2: GENERAR PLAN ===== -->
+    <div id="section-generar" class="section p-8">
+      <div class="max-w-6xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-semibold mb-1">Generador de Planes Inteligentes</h1>
+          <p class="text-[#9A9390]">El algoritmo analiza los gustos de todos y crea el día perfecto en Madrid</p>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <!-- FORM -->
+          <div class="lg:col-span-2 space-y-5">
+            <div class="card p-5">
+              <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="user-circle" class="w-4 h-4"></i> Organizador</h3>
+              <div class="space-y-3">
+                <div>
+                  <label class="text-xs font-medium text-[#9A9390] uppercase tracking-wide block mb-1.5">¿Quién organiza?</label>
+                  <select id="plan-organizer">
+                    <option value="">Selecciona un usuario...</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-[#9A9390] uppercase tracking-wide block mb-1.5">Fecha del plan</label>
+                  <input type="date" id="plan-date">
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-[#9A9390] uppercase tracking-wide block mb-1.5">Presupuesto por persona (€)</label>
+                  <input type="number" id="plan-budget" placeholder="50" min="10" max="500">
+                </div>
+              </div>
+            </div>
+            <div class="card p-5">
+              <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="user-plus" class="w-4 h-4"></i> Acompañantes</h3>
+              <div id="companions-list" class="flex flex-wrap gap-2"></div>
+              <p class="text-xs text-[#B0ABA5] mt-3">Haz clic para seleccionar/deseleccionar</p>
+            </div>
+            <div class="card p-5">
+              <h3 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="sliders" class="w-4 h-4"></i> Preferencias del día</h3>
+              <div class="space-y-3">
+                <div>
+                  <label class="text-xs font-medium text-[#9A9390] uppercase tracking-wide block mb-1.5">Zona preferida</label>
+                  <select id="plan-zone">
+                    <option value="">Sin preferencia (mezclar)</option>
+                    <option value="Centro">Centro / Sol</option>
+                    <option value="Retiro">Retiro / Salamanca</option>
+                    <option value="Malasaña">Malasaña / Chueca</option>
+                    <option value="Chamberí">Chamberí / Almagro</option>
+                    <option value="La Latina">La Latina / Lavapiés</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <button onclick="generatePlan()" class="btn-primary w-full flex items-center justify-center gap-2 py-3 text-base">
+              <i data-lucide="sparkles" class="w-5 h-5"></i> Generar Plan Perfecto
+            </button>
+          </div>
+          <!-- RESULT -->
+          <div class="lg:col-span-3">
+            <div id="plan-placeholder" class="card p-10 text-center text-[#B0ABA5] h-full flex flex-col items-center justify-center">
+              <i data-lucide="map-pin" class="w-14 h-14 mb-4 opacity-25"></i>
+              <p class="text-lg font-medium font-['Fraunces']">Tu itinerario aparecerá aquí</p>
+              <p class="text-sm mt-2">Completa el formulario y haz clic en Generar Plan</p>
+            </div>
+            <div id="plan-result" class="hidden space-y-4 slide-in"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SECCIÓN 3: MIS PLANES ===== -->
+    <div id="section-planes" class="section p-8">
+      <div class="max-w-5xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-semibold mb-1">Mis Planes y Reservas</h1>
+          <p class="text-[#9A9390]">Historial de planes confirmados y sus detalles</p>
+        </div>
+        <div id="reservations-list" class="space-y-4"></div>
+        <div id="no-reservations" class="hidden text-center py-20 text-[#B0ABA5]">
+          <i data-lucide="calendar-x" class="w-12 h-12 mx-auto mb-4 opacity-30"></i>
+          <p class="text-lg font-medium">Sin planes confirmados</p>
+          <p class="text-sm mt-1">Genera un plan y confírmalo para que aparezca aquí</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SECCIÓN 4: PANEL DE DATOS ===== -->
+    <div id="section-datos" class="section p-8">
+      <div class="max-w-6xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-semibold mb-1">Panel de Datos</h1>
+          <p class="text-[#9A9390]">Base de datos del sistema — Vista de backoffice</p>
+        </div>
+        <div class="flex gap-3 mb-6">
+          <button onclick="showDataTab('restaurantes')" class="data-tab-btn nav-item active px-4 py-2 rounded-xl text-sm font-medium" data-tab="restaurantes">🍽️ Restaurantes</button>
+          <button onclick="showDataTab('actividades')" class="data-tab-btn nav-item px-4 py-2 rounded-xl text-sm font-medium" data-tab="actividades">🎭 Actividades</button>
+          <button onclick="showDataTab('json')" class="data-tab-btn nav-item px-4 py-2 rounded-xl text-sm font-medium" data-tab="json">{ } JSON Viewer</button>
+        </div>
+        <div id="data-restaurantes" class="data-tab card overflow-hidden">
+          <div class="overflow-x-auto">
+            <table id="table-restaurantes"></table>
+          </div>
+        </div>
+        <div id="data-actividades" class="data-tab card overflow-hidden hidden">
+          <div class="overflow-x-auto">
+            <table id="table-actividades"></table>
+          </div>
+        </div>
+        <div id="data-json" class="data-tab card p-6 hidden">
+          <div class="json-viewer" id="json-viewer"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===== MODAL NUEVO USUARIO ===== -->
+<div class="modal-overlay" id="modal-user">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto scrollbar-hide">
+    <div class="flex items-center justify-between p-6 border-b border-[#EAE4D9]">
+      <h2 class="text-xl font-semibold">Nuevo Perfil</h2>
+      <button onclick="closeModal('modal-user')" class="text-[#9A9390] hover:text-[#1A1714]"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="p-6 space-y-5">
+      <div>
+        <label class="text-xs font-medium text-[#9A9390] uppercase tracking-wide block mb-1.5">Nombre</label>
+        <input type="text" id="new-user-name" placeholder="Ej: Claudia">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-[#9A9390] uppercase tracking-wide block mb-2">🍕 Preferencias de comida</label>
+        <div class="flex flex-wrap gap-2" id="tags-comida"></div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-[#9A9390] uppercase tracking-wide block mb-2">🎭 Actividades favoritas</label>
+        <div class="flex flex-wrap gap-2" id="tags-actividades"></div>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-[#9A9390] uppercase tracking-wide block mb-2">⚡ Ritmo ideal</label>
+        <div class="flex gap-2" id="tags-ritmo"></div>
+      </div>
+    </div>
+    <div class="flex gap-3 p-6 border-t border-[#EAE4D9]">
+      <button onclick="closeModal('modal-user')" class="btn-secondary flex-1">Cancelar</button>
+      <button onclick="saveUser()" class="btn-primary flex-1">Guardar Perfil</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL CONFIRMAR RESERVA ===== -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+    <div class="p-6 text-center">
+      <div class="w-16 h-16 bg-[#dcfce7] rounded-full flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="check-circle" class="w-8 h-8 text-[#15803d]"></i>
+      </div>
+      <h2 class="text-xl font-semibold mb-1">Confirmar Reserva Instantánea</h2>
+      <p class="text-[#9A9390] text-sm mb-4" id="confirm-msg">¿Deseas confirmar este plan completo?</p>
+      <div class="bg-[#FAFAF8] rounded-xl p-4 text-left mb-5" id="confirm-details"></div>
+      <div class="flex gap-3">
+        <button onclick="closeModal('modal-confirm')" class="btn-secondary flex-1">Cancelar</button>
+        <button onclick="confirmReservation()" class="btn-primary flex-1 flex items-center justify-center gap-2">
+          <i data-lucide="zap" class="w-4 h-4"></i> Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL DETALLE PLAN GUARDADO ===== -->
+<div class="modal-overlay" id="modal-plan-detail">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto scrollbar-hide">
+    <div class="flex items-center justify-between p-6 border-b border-[#EAE4D9]">
+      <h2 class="text-xl font-semibold" id="detail-title">Detalle del Plan</h2>
+      <button onclick="closeModal('modal-plan-detail')" class="text-[#9A9390] hover:text-[#1A1714]"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div id="detail-body" class="p-6"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="fixed bottom-6 right-6 z-50 hidden">
+  <div class="bg-[#1A1714] text-[#FAF7F2] px-5 py-3 rounded-xl shadow-xl flex items-center gap-3 text-sm font-medium slide-in">
+    <i data-lucide="check-circle" class="w-4 h-4 text-[#22c55e]" id="toast-icon"></i>
+    <span id="toast-msg">Acción completada</span>
+  </div>
+</div>
+
+<script>
+// ==================== DATA ====================
+const COLORS = ['#C4673A','#6B8F71','#C9A84C','#D4847A','#7B9EC5','#9B7FB5','#4AAFAB','#D46D8A'];
+
+const INITIAL_DB = {
+  restaurantes: [
+    { id:'r1', nombre:'La Taberna de El Sur', zona:'La Latina', tags:['tradicional','tapas','español'], precio:22, horario:'13:00-16:00, 20:00-00:00', url:'https://www.tabernaelsur.es', disponible:true },
+    { id:'r2', nombre:'Bodega de la Ardosa', zona:'Malasaña', tags:['tradicional','tapas','vermouth'], precio:15, horario:'12:00-15:00, 19:00-23:00', url:'https://laardosa.es', disponible:true },
+    { id:'r3', nombre:'Lateral Gran Vía', zona:'Centro', tags:['moderno','tapas','internacional'], precio:28, horario:'12:30-16:30, 20:00-00:30', url:'https://lateral.com', disponible:true },
+    { id:'r4', nombre:'Trattoria Sant Arcangelo', zona:'Chamberí', tags:['italiano','pasta','romantico'], precio:32, horario:'13:00-16:00, 20:30-23:30', url:'https://trattoriasantarcangelo.com', disponible:true },
+    { id:'r5', nombre:'Wagaboo Azca', zona:'Chamberí', tags:['asiatico','sushi','rapido'], precio:18, horario:'12:00-23:30', url:'https://wagaboo.com', disponible:true },
+    { id:'r6', nombre:'Celso y Manolo', zona:'Centro', tags:['tradicional','tapas','vermut'], precio:20, horario:'11:00-16:00, 18:00-23:00', url:'https://celsoandmanolo.es', disponible:true },
+    { id:'r7', nombre:'Naked & Famous Diner', zona:'Malasaña', tags:['americano','hamburgesas','rapido'], precio:14, horario:'12:00-23:00', url:'https://nakedandfamousdiner.com', disponible:true },
+    { id:'r8', nombre:'Sagaretxe Taberna Vasca', zona:'Retiro', tags:['vasco','pintxos','tradicional'], precio:25, horario:'13:00-16:00, 20:00-23:30', url:'https://sagaretxetaberna.es', disponible:true },
+    { id:'r9', nombre:'Federal Café', zona:'La Latina', tags:['vegetariano','brunch','moderno'], precio:16, horario:'09:00-17:00', url:'https://federalcafe.es', disponible:true },
+    { id:'r10', nombre:'Crudos Madrid', zona:'Chamberí', tags:['vegetariano','vegano','saludable'], precio:19, horario:'13:00-16:00, 20:00-23:00', url:'https://crudosmadrid.com', disponible:true },
+    { id:'r11', nombre:'El Restaurante del Círculo de Bellas Artes', zona:'Centro', tags:['tradicional','español','vistas'], precio:40, horario:'13:30-16:30, 21:00-23:30', url:'https://circulobellasartes.com', disponible:true },
+    { id:'r12', nombre:'Somos', zona:'Retiro', tags:['mediterraneo','moderno','romantico'], precio:35, horario:'13:00-16:30, 20:30-00:00', url:'https://somosmadrid.com', disponible:true }
+  ],
+  actividades: [
+    { id:'a1', nombre:'Museo del Prado', zona:'Retiro', tags:['arte','cultura','historia'], precio:15, horario:'10:00-20:00', url:'https://www.museodelprado.es', disponible:true },
+    { id:'a2', nombre:'Parque del Retiro', zona:'Retiro', tags:['naturaleza','fotografía','relax'], precio:0, horario:'06:00-22:00', url:'https://www.madrid.es/retiro', disponible:true },
+    { id:'a3', nombre:'Museo Reina Sofía', zona:'Centro', tags:['arte','contemporaneo','cultura'], precio:12, horario:'10:00-21:00 (lun cerrado)', url:'https://www.museoreinasofia.es', disponible:true },
+    { id:'a4', nombre:'Templo de Debod', zona:'Centro', tags:['historia','fotografía','monumentos'], precio:0, horario:'10:00-20:00', url:'https://www.madrid.es/debod', disponible:true },
+    { id:'a5', nombre:'Palacio Real de Madrid', zona:'Centro', tags:['monumentos','historia','cultura'], precio:14, horario:'10:00-19:00', url:'https://www.patrimonionacional.es/palacio-real', disponible:true },
+    { id:'a6', nombre:'Mercado de San Miguel', zona:'Centro', tags:['gastronomia','fotografía','moderno'], precio:0, horario:'10:00-00:00', url:'https://www.mercadodesanmiguel.es', disponible:true },
+    { id:'a7', nombre:'Estadio Santiago Bernabéu (tour)', zona:'Chamberí', tags:['deporte','monumentos','adrenalina'], precio:25, horario:'09:30-19:00', url:'https://www.realmadrid.com/bernabeu', disponible:true },
+    { id:'a8', nombre:'Matadero Madrid (Centro de Arte)', zona:'La Latina', tags:['arte','contemporaneo','fotografía'], precio:0, horario:'11:00-21:00 (lun cerrado)', url:'https://www.mataderomadrid.org', disponible:true },
+    { id:'a9', nombre:'Escape Room Madrid — Lock & Go', zona:'Malasaña', tags:['adrenalina','grupos','diversión'], precio:22, horario:'10:00-22:00', url:'https://lockandgo.es', disponible:true },
+    { id:'a10', nombre:'Teleférico de Madrid', zona:'Centro', tags:['naturaleza','vistas','fotografía'], precio:8, horario:'12:00-20:00', url:'https://www.teleferico.com', disponible:true },
+    { id:'a11', nombre:'CaixaForum Madrid', zona:'Retiro', tags:['arte','cultura','exposiciones'], precio:6, horario:'10:00-20:00', url:'https://caixaforum.org/madrid', disponible:true },
+    { id:'a12', nombre:'Ruta de Tapas por Lavapiés', zona:'La Latina', tags:['gastronomia','fotografía','diversión'], precio:20, horario:'12:00-22:00', url:'https://www.esmadrid.com', disponible:true }
+  ]
+};
+
+const TAG_OPTIONS = {
+  comida: ['tradicional','italiano','vegetariano','vegano','rápido','asiatico','tapas','brunch','americano','vasco','mediterráneo','exótico'],
+  actividades: ['arte','monumentos','naturaleza','adrenalina','fotografía','cultura','historia','grupos','relax','deporte','gastronomia'],
+  ritmo: ['relajado','moderado','intenso']
+};
+
+// ==================== STATE ====================
+let state = {
+  users: [],
+  reservations: [],
+  selectedTags: { comida: [], actividades: [], ritmo: [] },
+  currentPlan: null,
+  selectedCompanions: [],
+  db: JSON.parse(JSON.stringify(INITIAL_DB))
+};
+
+// ==================== LOCALSTORAGE ====================
+function saveState() {
+  localStorage.setItem('lp_users', JSON.stringify(state.users));
+  localStorage.setItem('lp_reservations', JSON.stringify(state.reservations));
+}
+function loadState() {
+  const u = localStorage.getItem('lp_users');
+  const r = localStorage.getItem('lp_reservations');
+  if (u) state.users = JSON.parse(u);
+  if (r) state.reservations = JSON.parse(r);
+}
+
+// ==================== NAVIGATION ====================
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item[data-section]').forEach(b => b.classList.remove('active'));
+  document.getElementById('section-' + name).classList.add('active');
+  document.querySelector(`[data-section="${name}"]`).classList.add('active');
+  if (name === 'generar') refreshGeneratorUI();
+  if (name === 'planes') renderReservations();
+  if (name === 'datos') renderDataPanel();
+}
+
+// ==================== MODAL ====================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ==================== TOAST ====================
+let toastTimer;
+function showToast(msg, type='success') {
+  const el = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+}
+
+// ==================== USERS ====================
+function openNewUserModal() {
+  state.selectedTags = { comida: [], actividades: [], ritmo: [] };
+  document.getElementById('new-user-name').value = '';
+  renderTagGroup('tags-comida', 'comida');
+  renderTagGroup('tags-actividades', 'actividades');
+  renderTagGroup('tags-ritmo', 'ritmo');
+  openModal('modal-user');
+  setTimeout(() => lucide.createIcons(), 50);
+}
+
+function renderTagGroup(containerId, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = TAG_OPTIONS[type].map(tag => `
+    <span class="tag px-3 py-1.5 rounded-full text-sm ${state.selectedTags[type].includes(tag) ? 'selected' : ''}"
+          onclick="toggleTag('${type}','${tag}',this)">${tag}</span>
+  `).join('');
+}
+
+function toggleTag(type, tag, el) {
+  const arr = state.selectedTags[type];
+  if (type === 'ritmo') {
+    state.selectedTags[type] = [tag];
+    document.querySelectorAll('#tags-ritmo .tag').forEach(t => t.classList.remove('selected'));
+    el.classList.add('selected');
+    return;
+  }
+  if (arr.includes(tag)) {
+    state.selectedTags[type] = arr.filter(t => t !== tag);
+    el.classList.remove('selected');
+  } else {
+    state.selectedTags[type].push(tag);
+    el.classList.add('selected');
+  }
+}
+
+function saveUser() {
+  const name = document.getElementById('new-user-name').value.trim();
+  if (!name) { alert('Por favor, introduce un nombre.'); return; }
+  const user = {
+    id: 'u' + Date.now(),
+    nombre: name,
+    color: COLORS[state.users.length % COLORS.length],
+    gustos: {
+      comida: [...state.selectedTags.comida],
+      actividades: [...state.selectedTags.actividades],
+      ritmo: state.selectedTags.ritmo[0] || 'moderado'
+    }
+  };
+  state.users.push(user);
+  saveState();
+  closeModal('modal-user');
+  renderUsers();
+  showToast(`Perfil de ${name} creado ✨`);
+}
+
+function deleteUser(id) {
+  state.users = state.users.filter(u => u.id !== id);
+  saveState();
+  renderUsers();
+  showToast('Usuario eliminado');
+}
+
+function renderUsers() {
+  const grid = document.getElementById('users-grid');
+  const noUsers = document.getElementById('no-users');
+  if (state.users.length === 0) {
+    grid.innerHTML = '';
+    noUsers.classList.remove('hidden');
+    return;
+  }
+  noUsers.classList.add('hidden');
+  grid.innerHTML = state.users.map(u => `
+    <div class="card p-5 slide-in">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="user-avatar" style="background:${u.color}22;color:${u.color}">${u.nombre.charAt(0).toUpperCase()}</div>
+        <div>
+          <div class="font-semibold">${u.nombre}</div>
+          <div class="text-xs text-[#9A9390]">Ritmo: <span class="font-medium text-[#1A1714]">${u.gustos.ritmo}</span></div>
+        </div>
+        <button onclick="deleteUser('${u.id}')" class="ml-auto text-[#C0BAB2] hover:text-red-400 transition-colors">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+      ${u.gustos.comida.length ? `<div class="mb-2"><span class="text-xs text-[#9A9390] block mb-1.5">🍕 Comida</span><div class="flex flex-wrap gap-1">${u.gustos.comida.map(t=>`<span class="text-xs px-2.5 py-1 rounded-full bg-[#FFF5EE] text-[#C4673A] font-medium">${t}</span>`).join('')}</div></div>` : ''}
+      ${u.gustos.actividades.length ? `<div><span class="text-xs text-[#9A9390] block mb-1.5">🎭 Actividades</span><div class="flex flex-wrap gap-1">${u.gustos.actividades.map(t=>`<span class="text-xs px-2.5 py-1 rounded-full bg-[#F0F7F1] text-[#6B8F71] font-medium">${t}</span>`).join('')}</div></div>` : ''}
+    </div>
+  `).join('');
+  setTimeout(() => lucide.createIcons(), 50);
+}
+
+// ==================== PLAN GENERATOR ====================
+function refreshGeneratorUI() {
+  const sel = document.getElementById('plan-organizer');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Selecciona un usuario...</option>';
+  state.users.forEach(u => {
+    sel.innerHTML += `<option value="${u.id}" ${prev===u.id?'selected':''}>${u.nombre}</option>`;
+  });
+  renderCompanionsPicker();
+  const today = new Date().toISOString().split('T')[0];
+  if (!document.getElementById('plan-date').value) document.getElementById('plan-date').value = today;
+}
+
+function renderCompanionsPicker() {
+  const organizerId = document.getElementById('plan-organizer').value;
+  const container = document.getElementById('companions-list');
+  const others = state.users.filter(u => u.id !== organizerId);
+  if (others.length === 0) {
+    container.innerHTML = '<p class="text-xs text-[#B0ABA5]">Crea más usuarios para añadir acompañantes</p>';
+    return;
+  }
+  container.innerHTML = others.map(u => `
+    <span class="companion-chip ${state.selectedCompanions.includes(u.id) ? 'selected' : ''}"
+          onclick="toggleCompanion('${u.id}',this)">
+      <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background:${u.color}33;color:${u.color}">${u.nombre.charAt(0)}</div>
+      ${u.nombre}
+    </span>
+  `).join('');
+}
+
+document.addEventListener('change', function(e) {
+  if (e.target.id === 'plan-organizer') {
+    state.selectedCompanions = state.selectedCompanions.filter(id => id !== e.target.value);
+    renderCompanionsPicker();
+  }
+});
+
+function toggleCompanion(id, el) {
+  if (state.selectedCompanions.includes(id)) {
+    state.selectedCompanions = state.selectedCompanions.filter(c => c !== id);
+    el.classList.remove('selected');
+  } else {
+    state.selectedCompanions.push(id);
+    el.classList.add('selected');
+  }
+}
+
+function generatePlan() {
+  const organizerId = document.getElementById('plan-organizer').value;
+  const budget = parseFloat(document.getElementById('plan-budget').value) || 50;
+  const date = document.getElementById('plan-date').value;
+  const zone = document.getElementById('plan-zone').value;
+
+  if (!organizerId) { showToast('Selecciona un organizador primero','error'); return; }
+
+  const organizer = state.users.find(u => u.id === organizerId);
+  const companions = state.selectedCompanions.map(id => state.users.find(u => u.id === id)).filter(Boolean);
+  const allUsers = [organizer, ...companions];
+  const totalPeople = allUsers.length;
+  const totalBudget = budget * totalPeople;
+
+  // Merge tags
+  const mergedComida = [...new Set(allUsers.flatMap(u => u.gustos.comida))];
+  const mergedActividades = [...new Set(allUsers.flatMap(u => u.gustos.actividades))];
+  const ritmoCounts = { relajado:0, moderado:0, intenso:0 };
+  allUsers.forEach(u => { if (ritmoCounts[u.gustos.ritmo] !== undefined) ritmoCounts[u.gustos.ritmo]++; });
+  const ritmo = Object.entries(ritmoCounts).sort((a,b)=>b[1]-a[1])[0][0];
+
+  // Score restaurants
+  function scorePlace(place, tagList) {
+    return place.tags.filter(t => tagList.some(ut => ut === t || ut.includes(t) || t.includes(ut))).length;
+  }
+
+  let restaurants = state.db.restaurantes
+    .filter(r => r.precio * totalPeople <= totalBudget * 0.45)
+    .filter(r => !zone || r.zona.includes(zone) || zone === '')
+    .map(r => ({ ...r, score: scorePlace(r, mergedComida) + (zone && r.zona.includes(zone) ? 2 : 0) }))
+    .sort((a,b) => b.score - a.score);
+
+  let activities = state.db.actividades
+    .map(a => ({ ...a, score: scorePlace(a, mergedActividades) + (zone && a.zona.includes(zone) ? 2 : 0) }))
+    .sort((a,b) => b.score - a.score);
+
+  if (ritmo === 'intenso') activities = activities.filter(a => !a.tags.includes('relax'));
+  if (ritmo === 'relajado') activities = activities.sort((a,b) => (a.tags.includes('adrenalina')?1:0) - (b.tags.includes('adrenalina')?1:0));
+
+  const morning = activities.find(a => a.precio <= 20) || activities[0];
+  const lunch = restaurants[0];
+  const afternoon = activities.find(a => a.id !== (morning?.id)) || activities[1];
+
+  if (!morning || !lunch || !afternoon) {
+    showToast('No hay suficientes lugares para el presupuesto elegido','error'); return;
+  }
+
+  const totalCost = (morning.precio + lunch.precio + afternoon.precio) * totalPeople;
+  const remainingBudget = totalBudget - totalCost;
+
+  state.currentPlan = {
+    organizer, companions, allUsers, totalPeople, budget, totalBudget,
+    totalCost, remainingBudget, date, ritmo, mergedComida, mergedActividades,
+    morning, lunch, afternoon, zone
+  };
+
+  renderPlanResult(state.currentPlan);
+}
+
+function renderPlanResult(plan) {
+  document.getElementById('plan-placeholder').classList.add('hidden');
+  const result = document.getElementById('plan-result');
+  result.classList.remove('hidden');
+
+  const budgetPct = Math.min(100, Math.round((plan.totalCost / plan.totalBudget) * 100));
+
+  result.innerHTML = `
+    <div class="card p-5">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h2 class="font-semibold text-lg flex items-center gap-2">
+            <span class="text-2xl">🗺️</span>
+            Plan para ${plan.allUsers.map(u=>u.nombre).join(' & ')}
+          </h2>
+          <p class="text-sm text-[#9A9390] mt-0.5">${formatDate(plan.date)} · Ritmo ${plan.ritmo} · ${plan.totalPeople} persona${plan.totalPeople>1?'s':''}</p>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-[#9A9390]">Presupuesto total</div>
+          <div class="font-bold text-lg">${plan.totalBudget.toFixed(0)}€</div>
+        </div>
+      </div>
+      <div class="budget-bar mb-1">
+        <div class="budget-fill" style="width:${budgetPct}%"></div>
+      </div>
+      <div class="flex justify-between text-xs text-[#9A9390]">
+        <span>Gasto: <strong class="text-[#1A1714]">${plan.totalCost.toFixed(0)}€</strong></span>
+        <span>Sobrante: <strong class="text-[#6B8F71]">${plan.remainingBudget.toFixed(0)}€</strong></span>
+      </div>
+      ${plan.mergedComida.length || plan.mergedActividades.length ? `
+      <div class="mt-3 pt-3 border-t border-[#EAE4D9] flex flex-wrap gap-1">
+        <span class="text-xs text-[#9A9390] mr-1">Match:</span>
+        ${plan.mergedComida.slice(0,3).map(t=>`<span class="text-xs px-2 py-0.5 rounded-full bg-[#FFF5EE] text-[#C4673A]">${t}</span>`).join('')}
+        ${plan.mergedActividades.slice(0,3).map(t=>`<span class="text-xs px-2 py-0.5 rounded-full bg-[#F0F7F1] text-[#6B8F71]">${t}</span>`).join('')}
+      </div>` : ''}
+    </div>
+
+    <div class="space-y-3">
+      ${renderItineraryBlock('morning', '🌅 Mañana (10:00 — 13:00)', plan.morning, 'actividad', plan.totalPeople)}
+      ${renderItineraryBlock('lunch', '🍽️ Mediodía (13:30 — 15:30)', plan.lunch, 'restaurante', plan.totalPeople)}
+      ${renderItineraryBlock('afternoon', '☀️ Tarde (16:00 — 19:00)', plan.afternoon, 'actividad', plan.totalPeople)}
+    </div>
+
+    <div class="flex gap-3 mt-2">
+      <button onclick="generatePlan()" class="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Regenerar
+      </button>
+      <button onclick="openConfirmModal()" class="btn-primary flex-1 flex items-center justify-center gap-2 text-sm">
+        <i data-lucide="zap" class="w-4 h-4"></i> Confirmar Todo
+      </button>
+    </div>
+  `;
+  setTimeout(() => lucide.createIcons(), 50);
+}
+
+function renderItineraryBlock(timeClass, label, place, type, people) {
+  const costTotal = place.precio * people;
+  return `
+    <div class="card p-4">
+      <div class="itinerary-block ${timeClass}">
+        <div class="text-xs font-semibold text-[#9A9390] uppercase tracking-wide mb-2">${label}</div>
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <div class="font-semibold text-base">${place.nombre}</div>
+            <div class="flex items-center gap-3 mt-1.5 text-sm text-[#9A9390]">
+              <span class="zone-badge">${place.zona}</span>
+              <span>⏰ ${place.horario.split(',')[0]}</span>
+            </div>
+            <div class="flex flex-wrap gap-1 mt-2">
+              ${place.tags.map(t=>`<span class="text-xs px-2 py-0.5 rounded-full bg-[#F5F3F0] text-[#6B6B6B]">${t}</span>`).join('')}
+            </div>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <div class="font-bold text-base">${place.precio === 0 ? 'Gratis' : costTotal + '€'}</div>
+            <div class="text-xs text-[#9A9390]">${place.precio === 0 ? '' : place.precio + '€/p'}</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 mt-3 pt-3 border-t border-[#EAE4D9]">
+          <span class="avail-dot"></span>
+          <span class="text-xs text-[#6B8F71] font-medium">Disponibilidad garantizada</span>
+          <div class="ml-auto flex gap-2">
+            <a href="${place.url}" target="_blank" class="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1">
+              <i data-lucide="external-link" class="w-3 h-3"></i> Web Oficial
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function openConfirmModal() {
+  if (!state.currentPlan) return;
+  const p = state.currentPlan;
+  document.getElementById('confirm-msg').textContent = `Plan para ${p.allUsers.map(u=>u.nombre).join(' & ')} el ${formatDate(p.date)}`;
+  document.getElementById('confirm-details').innerHTML = `
+    <div class="space-y-2 text-sm">
+      <div class="flex justify-between"><span class="text-[#9A9390]">🌅 Mañana</span><span class="font-medium">${p.morning.nombre}</span></div>
+      <div class="flex justify-between"><span class="text-[#9A9390]">🍽️ Almuerzo</span><span class="font-medium">${p.lunch.nombre}</span></div>
+      <div class="flex justify-between"><span class="text-[#9A9390]">☀️ Tarde</span><span class="font-medium">${p.afternoon.nombre}</span></div>
+      <div class="border-t border-[#EAE4D9] pt-2 flex justify-between font-semibold">
+        <span>Coste total</span><span>${p.totalCost.toFixed(0)}€</span>
+      </div>
+    </div>
+  `;
+  openModal('modal-confirm');
+  setTimeout(() => lucide.createIcons(), 50);
+}
+
+function confirmReservation() {
+  if (!state.currentPlan) return;
+  const p = state.currentPlan;
+  const code = '#MAD-' + Math.floor(1000 + Math.random() * 9000);
+  const reservation = {
+    id: 'res_' + Date.now(),
+    code,
+    date: p.date,
+    organizer: p.organizer,
+    companions: p.companions,
+    allUsers: p.allUsers,
+    morning: p.morning,
+    lunch: p.lunch,
+    afternoon: p.afternoon,
+    totalCost: p.totalCost,
+    totalBudget: p.totalBudget,
+    remainingBudget: p.remainingBudget,
+    totalPeople: p.totalPeople,
+    status: 'Confirmado',
+    createdAt: new Date().toISOString()
+  };
+  state.reservations.unshift(reservation);
+  saveState();
+  closeModal('modal-confirm');
+  state.currentPlan = null;
+  document.getElementById('plan-placeholder').classList.remove('hidden');
+  document.getElementById('plan-result').classList.add('hidden');
+  showToast(`¡Reserva ${code} confirmada! 🎉`);
+  setTimeout(() => showSection('planes'), 1200);
+}
+
+// ==================== RESERVATIONS ====================
+function renderReservations() {
+  const container = document.getElementById('reservations-list');
+  const noRes = document.getElementById('no-reservations');
+  if (state.reservations.length === 0) {
+    container.innerHTML = '';
+    noRes.classList.remove('hidden');
+    return;
+  }
+  noRes.classList.add('hidden');
+  container.innerHTML = state.reservations.map(r => `
+    <div class="card p-5 slide-in">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-3 mb-2">
+            <span class="font-bold text-lg font-['Fraunces']">${r.code}</span>
+            <span class="status-confirmed">${r.status}</span>
+          </div>
+          <div class="text-sm text-[#9A9390] mb-1">${formatDate(r.date)} · ${r.allUsers.map(u=>u.nombre).join(', ')}</div>
+          <div class="flex flex-wrap gap-2 mt-2 text-sm">
+            <span class="flex items-center gap-1.5 text-[#6B6B6B]"><span>🌅</span>${r.morning.nombre}</span>
+            <span class="text-[#D5CFC5]">·</span>
+            <span class="flex items-center gap-1.5 text-[#6B6B6B]"><span>🍽️</span>${r.lunch.nombre}</span>
+            <span class="text-[#D5CFC5]">·</span>
+            <span class="flex items-center gap-1.5 text-[#6B6B6B]"><span>☀️</span>${r.afternoon.nombre}</span>
+          </div>
+        </div>
+        <div class="text-right flex-shrink-0">
+          <div class="font-bold text-xl">${r.totalCost.toFixed(0)}€</div>
+          <div class="text-xs text-[#9A9390]">de ${r.totalBudget.toFixed(0)}€</div>
+          <button onclick="openDetailModal('${r.id}')" class="btn-secondary text-xs px-3 py-1.5 mt-2 flex items-center gap-1">
+            <i data-lucide="eye" class="w-3 h-3"></i> Ver detalle
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  setTimeout(() => lucide.createIcons(), 50);
+}
+
+function openDetailModal(id) {
+  const r = state.reservations.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('detail-title').textContent = `Plan ${r.code}`;
+  document.getElementById('detail-body').innerHTML = `
+    <div class="space-y-4">
+      <div class="flex items-center gap-3 flex-wrap">
+        ${r.allUsers.map(u => `
+          <div class="flex items-center gap-2">
+            <div class="user-avatar" style="background:${u.color}22;color:${u.color}">${u.nombre.charAt(0)}</div>
+            <span class="text-sm font-medium">${u.nombre}</span>
+          </div>
+        `).join('')}
+        <span class="text-sm text-[#9A9390]">· ${formatDate(r.date)}</span>
+        <span class="status-confirmed ml-auto">${r.status}</span>
+      </div>
+      <div class="space-y-3">
+        ${[
+          {label:'🌅 Mañana (10:00)', place:r.morning, cls:'morning'},
+          {label:'🍽️ Mediodía (13:30)', place:r.lunch, cls:'lunch'},
+          {label:'☀️ Tarde (16:00)', place:r.afternoon, cls:'afternoon'}
+        ].map(item => `
+          <div class="itinerary-block ${item.cls} py-1">
+            <div class="text-xs text-[#9A9390] font-semibold uppercase mb-1">${item.label}</div>
+            <div class="flex justify-between items-center">
+              <div>
+                <div class="font-medium">${item.place.nombre}</div>
+                <div class="text-xs text-[#9A9390]">${item.place.zona} · ${item.place.horario.split(',')[0]}</div>
+              </div>
+              <div class="text-right">
+                <div class="font-semibold">${item.place.precio === 0 ? 'Gratis' : (item.place.precio * r.totalPeople) + '€'}</div>
+                <a href="${item.place.url}" target="_blank" class="text-xs text-[#C4673A] hover:underline">Ver web →</a>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="bg-[#FAFAF8] rounded-xl p-4">
+        <div class="flex justify-between text-sm mb-1"><span class="text-[#9A9390]">Coste total</span><span class="font-bold">${r.totalCost.toFixed(0)}€</span></div>
+        <div class="flex justify-between text-sm"><span class="text-[#9A9390]">Presupuesto restante</span><span class="font-semibold text-[#6B8F71]">${r.remainingBudget.toFixed(0)}€</span></div>
+      </div>
+    </div>
+  `;
+  openModal('modal-plan-detail');
+}
+
+// ==================== DATA PANEL ====================
+function showDataTab(tab) {
+  document.querySelectorAll('.data-tab').forEach(d => d.classList.add('hidden'));
+  document.querySelectorAll('.data-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('data-' + tab).classList.remove('hidden');
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+}
+
+function renderDataPanel() {
+  renderDataTable('table-restaurantes', state.db.restaurantes, ['nombre','zona','tags','precio','url']);
+  renderDataTable('table-actividades', state.db.actividades, ['nombre','zona','tags','precio','url']);
+  renderJsonViewer();
+}
+
+function renderDataTable(tableId, data, fields) {
+  const table = document.getElementById(tableId);
+  const headers = { nombre:'Nombre', zona:'Zona', tags:'Tags', precio:'Precio/p', url:'URL' };
+  table.innerHTML = `
+    <thead><tr>${fields.map(f=>`<th>${headers[f]||f}</th>`).join('')}<th>Estado</th></tr></thead>
+    <tbody>${data.map(row => `
+      <tr>
+        ${fields.map(f => {
+          if (f === 'tags') return `<td>${row[f].map(t=>`<span class="zone-badge mr-1">${t}</span>`).join('')}</td>`;
+          if (f === 'precio') return `<td class="font-medium">${row[f] === 0 ? '<span class="text-[#6B8F71]">Gratis</span>' : row[f]+'€'}</td>`;
+          if (f === 'url') return `<td><a href="${row[f]}" target="_blank" class="text-[#C4673A] text-xs hover:underline">${row[f].replace('https://','')}</a></td>`;
+          return `<td class="font-medium">${row[f]}</td>`;
+        }).join('')}
+        <td><span class="text-xs"><span class="avail-dot"></span>Disponible</span></td>
+      </tr>
+    `).join('')}</tbody>
+  `;
+}
+
+function renderJsonViewer() {
+  const viewer = document.getElementById('json-viewer');
+  const data = { restaurantes: state.db.restaurantes, actividades: state.db.actividades };
+  viewer.innerHTML = syntaxHighlight(JSON.stringify(data, null, 2));
+}
+
+function syntaxHighlight(json) {
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function(match) {
+      let cls = 'json-num';
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) cls = 'json-key';
+        else cls = 'json-str';
+      } else if (/true|false/.test(match)) cls = 'text-blue-500';
+      return `<span class="${cls}">${match}</span>`;
+    });
+}
+
+// ==================== UTILS ====================
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('es-ES', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+
+// ==================== INIT ====================
+function init() {
+  loadState();
+  renderUsers();
+  refreshGeneratorUI();
+  renderReservations();
+  renderDataPanel();
+
+  // Seed demo users if empty
+  if (state.users.length === 0) {
+    state.users = [
+      { id:'demo1', nombre:'Bruno', color:'#C4673A', gustos:{ comida:['tapas','tradicional'], actividades:['fotografía','monumentos','arte'], ritmo:'moderado' }},
+      { id:'demo2', nombre:'Claudia', color:'#6B8F71', gustos:{ comida:['vegetariano','italiano'], actividades:['arte','naturaleza','cultura'], ritmo:'relajado' }}
+    ];
+    saveState();
+    renderUsers();
+  }
+
+  setTimeout(() => lucide.createIcons(), 100);
+}
+
+init();
+</script>
+</body>
+</html>
