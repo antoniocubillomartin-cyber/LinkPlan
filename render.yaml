@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: link-plan-api
+    env: node
+    rootDir: backend
+    buildCommand: npm ci && npm run prisma:generate
+    startCommand: npm run start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
