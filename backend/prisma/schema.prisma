@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VenueType {
+  RESTAURANT
+  ACTIVITY
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+model User {
+  id           String            @id @default(cuid())
+  name         String
+  color        String
+  foodTags     String[]          @default([])
+  activityTags String[]          @default([])
+  pace         String            @default("moderado")
+  createdAt    DateTime          @default(now())
+  plans        Plan[]            @relation("OrganizerPlans")
+  participants PlanParticipant[]
+}
+
+model Venue {
+  id             String   @id
+  name           String
+  zone           String
+  tags           String[]
+  price          Int
+  schedule       String
+  url            String
+  available      Boolean  @default(true)
+  type           VenueType
+  morningPlans   Plan[]   @relation("MorningVenue")
+  lunchPlans     Plan[]   @relation("LunchVenue")
+  afternoonPlans Plan[]   @relation("AfternoonVenue")
+}
+
+model Plan {
+  id              String            @id @default(cuid())
+  date            DateTime
+  zone            String?
+  pace            String
+  budgetPerPerson Float
+  totalBudget     Float
+  totalCost       Float
+  remainingBudget Float
+  createdAt       DateTime          @default(now())
+  organizerId     String
+  organizer       User              @relation("OrganizerPlans", fields: [organizerId], references: [id], onDelete: Restrict)
+  morningVenueId  String
+  morningVenue    Venue             @relation("MorningVenue", fields: [morningVenueId], references: [id], onDelete: Restrict)
+  lunchVenueId    String
+  lunchVenue      Venue             @relation("LunchVenue", fields: [lunchVenueId], references: [id], onDelete: Restrict)
+  afternoonVenueId String
+  afternoonVenue  Venue             @relation("AfternoonVenue", fields: [afternoonVenueId], references: [id], onDelete: Restrict)
+  participants    PlanParticipant[]
+  reservation     Reservation?
+}
+
+model PlanParticipant {
+  id     String @id @default(cuid())
+  planId String
+  userId String
+
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, userId])
+}
+
+model Reservation {
+  id        String            @id @default(cuid())
+  code      String            @unique
+  status    ReservationStatus @default(CONFIRMED)
+  planId    String            @unique
+  plan      Plan              @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdAt DateTime          @default(now())
+}
