@@ -1,12 +1,26 @@
 import type { Plan, Reservation, StoredPlan, User, Venue } from '@/types';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://link-plan-api.onrender.com';
+const TOKEN_KEY = 'lp_token';
+
+export function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string | null) {
+  if (typeof window === 'undefined') return;
+  if (token) window.localStorage.setItem(TOKEN_KEY, token);
+  else window.localStorage.removeItem(TOKEN_KEY);
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
   const response = await fetch(`${API}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {})
     },
     credentials: 'include',
@@ -24,11 +38,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+type AuthUserResponse = User & { token?: string };
+
+function consumeAuthResponse(payload: AuthUserResponse): User {
+  const { token, ...user } = payload;
+  if (token) setToken(token);
+  return user as User;
+}
+
 export const api = {
   users: () => request<User[]>('/api/users'),
   createUser: (body: Pick<User, 'name' | 'foodTags' | 'activityTags' | 'pace'>) => request<User>('/api/users', { method: 'POST', body: JSON.stringify(body) }),
   deleteUser: (id: string) => request<void>(`/api/users/${id}`, { method: 'DELETE' }),
-  updateMe: (body: Partial<Pick<User, 'name' | 'description' | 'foodTags' | 'activityTags'>>) =>
+  updateMe: (body: Partial<Pick<User, 'name' | 'description' | 'foodTags' | 'activityTags' | 'pace'>>) =>
     request<User>('/api/users/me', { method: 'PATCH', body: JSON.stringify(body) }),
   friends: () => request<User[]>('/api/friends'),
   addFriend: (userId: string) => request<{ ok: true }>(`/api/friends/${userId}`, { method: 'POST' }),
@@ -53,10 +75,22 @@ export const api = {
   adminData: () => request<{ restaurants: Venue[]; activities: Venue[]; stats: { plans: number; reservations: number } }>('/api/admin/data'),
   auth: {
     me: () => request<User>('/api/auth/me'),
-    logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+    logout: async () => {
+      try {
+        await request<void>('/api/auth/logout', { method: 'POST' });
+      } finally {
+        setToken(null);
+      }
+    },
     registerOptions: (body: { username: string; name: string }) => request<unknown>('/api/auth/register/options', { method: 'POST', body: JSON.stringify(body) }),
-    registerVerify: (body: { username: string; name: string; response: unknown }) => request<User>('/api/auth/register/verify', { method: 'POST', body: JSON.stringify(body) }),
+    registerVerify: async (body: { username: string; name: string; response: unknown }) => {
+      const payload = await request<AuthUserResponse>('/api/auth/register/verify', { method: 'POST', body: JSON.stringify(body) });
+      return consumeAuthResponse(payload);
+    },
     loginOptions: (body: { username: string }) => request<unknown>('/api/auth/login/options', { method: 'POST', body: JSON.stringify(body) }),
-    loginVerify: (body: { username: string; response: unknown }) => request<User>('/api/auth/login/verify', { method: 'POST', body: JSON.stringify(body) })
+    loginVerify: async (body: { username: string; response: unknown }) => {
+      const payload = await request<AuthUserResponse>('/api/auth/login/verify', { method: 'POST', body: JSON.stringify(body) });
+      return consumeAuthResponse(payload);
+    }
   }
 };

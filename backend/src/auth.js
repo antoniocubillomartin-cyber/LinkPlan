@@ -34,10 +34,16 @@ function issueSession(res, userId) {
     maxAge: 30 * 24 * 60 * 60 * 1000,
     path: '/'
   });
+  return token;
 }
 
 function readSession(req) {
-  const token = req.cookies?.[COOKIE_NAME];
+  const header = req.headers?.authorization || req.headers?.Authorization;
+  let token = null;
+  if (header && typeof header === 'string' && header.toLowerCase().startsWith('bearer ')) {
+    token = header.slice(7).trim();
+  }
+  if (!token) token = req.cookies?.[COOKIE_NAME];
   if (!token) return null;
   try {
     return jwt.verify(token, JWT_SECRET);
@@ -141,8 +147,8 @@ function createAuthRouter(prisma) {
         }
       });
 
-      issueSession(res, user.id);
-      res.status(201).json(publicUser(user));
+      const token = issueSession(res, user.id);
+      res.status(201).json({ ...publicUser(user), token });
     } catch (err) {
       next(err);
     }
@@ -221,8 +227,8 @@ function createAuthRouter(prisma) {
         data: { counter: BigInt(verification.authenticationInfo.newCounter) }
       });
 
-      issueSession(res, user.id);
-      res.json(publicUser(user));
+      const token = issueSession(res, user.id);
+      res.json({ ...publicUser(user), token });
     } catch (err) {
       next(err);
     }

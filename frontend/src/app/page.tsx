@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { TagSelector } from '@/components/TagSelector';
 import { LoginScreen } from '@/components/LoginScreen';
 import { ProfilePanel } from '@/components/ProfilePanel';
+import { OnboardingGustos } from '@/components/OnboardingGustos';
 import { useAuth } from '@/lib/authContext';
 import type { Plan, StoredPlan, User, Venue } from '@/types';
 
@@ -28,7 +29,7 @@ const DURATIONS = [
 const ZONES = ['', 'Centro', 'Retiro', 'Malasaña', 'Chamberí', 'La Latina'];
 
 export default function Home() {
-  const { user: authUser, loading: authLoading, logout } = useAuth();
+  const { user: authUser, loading: authLoading, logout, setUser } = useAuth();
 
   if (authLoading) {
     return (
@@ -48,6 +49,19 @@ export default function Home() {
   }
 
   if (!authUser) return <LoginScreen />;
+
+  const needsOnboarding = (authUser.foodTags?.length ?? 0) === 0 && (authUser.activityTags?.length ?? 0) === 0;
+  if (needsOnboarding) {
+    return (
+      <OnboardingGustos
+        me={authUser}
+        onComplete={async (patch) => {
+          const updated = await api.updateMe(patch);
+          setUser(updated);
+        }}
+      />
+    );
+  }
 
   return <App authUser={authUser} onLogout={logout} />;
 }

@@ -85,7 +85,8 @@ const profileSchema = z.object({
   name: z.string().min(1).max(60).optional(),
   description: z.string().max(280).optional().nullable(),
   foodTags: z.array(z.string()).optional(),
-  activityTags: z.array(z.string()).optional()
+  activityTags: z.array(z.string()).optional(),
+  pace: z.enum(['relajado', 'moderado', 'intenso']).optional()
 });
 
 app.patch('/api/users/me', requireAuth, async (req, res, next) => {
@@ -97,7 +98,8 @@ app.patch('/api/users/me', requireAuth, async (req, res, next) => {
         ...(patch.name !== undefined ? { name: patch.name } : {}),
         ...(patch.description !== undefined ? { description: patch.description } : {}),
         ...(patch.foodTags !== undefined ? { foodTags: patch.foodTags } : {}),
-        ...(patch.activityTags !== undefined ? { activityTags: patch.activityTags } : {})
+        ...(patch.activityTags !== undefined ? { activityTags: patch.activityTags } : {}),
+        ...(patch.pace !== undefined ? { pace: patch.pace } : {})
       }
     });
     res.json(user);
