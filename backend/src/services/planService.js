@@ -12,7 +12,29 @@ function pickPace(users) {
   return Object.entries(paceCounts).sort((a, b) => b[1] - a[1])[0][0] ?? 'moderado';
 }
 
-function generatePlan({ organizer, companions, budgetPerPerson, date, zone, restaurants, activities }) {
+function durationFilter(activities, duration) {
+  // 'corto' favours short/free things, 'largo' favours immersive/cultural ones
+  if (duration === 'corto') return activities.filter((a) => !a.tags.includes('exposiciones') && !a.tags.includes('conciertos'));
+  if (duration === 'largo') return activities;
+  return activities;
+}
+
+function hashCombo(a, b, c) {
+  return `${a.id}|${b.id}|${c.id}`;
+}
+
+function generatePlan({
+  organizer,
+  companions,
+  budgetPerPerson,
+  date,
+  zone,
+  restaurants,
+  activities,
+  duration = 'medio',
+  excludeIds = [],
+  variantSeed = 0
+}) {
   const allUsers = [organizer, ...companions];
   if (!organizer || allUsers.length === 0) {
     throw new Error('Organizer is required');
@@ -23,36 +45,59 @@ function generatePlan({ organizer, companions, budgetPerPerson, date, zone, rest
   const mergedFood = [...new Set(allUsers.flatMap((u) => u.foodTags))];
   const mergedActivities = [...new Set(allUsers.flatMap((u) => u.activityTags))];
   const pace = pickPace(allUsers);
+  const excludeSet = new Set(excludeIds);
 
   let rankedRestaurants = restaurants
-    .filter((r) => r.available)
-    .filter((r) => r.price * totalPeople <= totalBudget * 0.45)
+    .filter((r) => r.available && r.price <= budgetPerPerson)
     .map((r) => ({ ...r, score: scorePlace(r, mergedFood, zone) }))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score || a.price - b.price);
 
   let rankedActivities = activities
-    .filter((a) => a.available)
+    .filter((a) => a.available && a.price <= budgetPerPerson)
     .map((a) => ({ ...a, score: scorePlace(a, mergedActivities, zone) }))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score || a.price - b.price);
+
+  rankedActivities = durationFilter(rankedActivities, duration);
 
   if (pace === 'intenso') rankedActivities = rankedActivities.filter((a) => !a.tags.includes('relax'));
-  if (pace === 'relajado') rankedActivities = rankedActivities.sort((a, b) => (a.tags.includes('adrenalina') ? 1 : 0) - (b.tags.includes('adrenalina') ? 1 : 0));
-
-  const morning = rankedActivities.find((a) => a.price <= 20) ?? rankedActivities[0];
-  const lunch = rankedRestaurants[0];
-  const afternoon = rankedActivities.find((a) => a.id !== morning?.id) ?? rankedActivities[1];
-
-  if (!morning || !lunch || !afternoon) {
-    throw new Error('No available itinerary for selected budget/preferences');
+  if (pace === 'relajado') {
+    rankedActivities = [...rankedActivities].sort(
+      (a, b) => (a.tags.includes('adrenalina') ? 1 : 0) - (b.tags.includes('adrenalina') ? 1 : 0)
+    );
   }
 
-  const totalCost = (morning.price + lunch.price + afternoon.price) * totalPeople;
+  const candidateMornings = rankedActivities.filter((a) => !excludeSet.has(a.id)).slice(0, 12);
+  const candidateLunches = rankedRestaurants.filter((r) => !excludeSet.has(r.id)).slice(0, 12);
+  const candidateAfternoons = rankedActivities.filter((a) => !excludeSet.has(a.id)).slice(0, 12);
+
+  let best = null;
+  for (const m of candidateMornings) {
+    for (const l of candidateLunches) {
+      for (const a of candidateAfternoons) {
+        if (a.id === m.id) continue;
+        const perPerson = m.price + l.price + a.price;
+        if (perPerson > budgetPerPerson) continue;
+        const score = m.score + l.score + a.score + (variantSeed ? (hashCombo(m, l, a).length * variantSeed) % 5 : 0);
+        if (!best || score > best.score || (score === best.score && perPerson < best.perPerson)) {
+          best = { morning: m, lunch: l, afternoon: a, score, perPerson };
+        }
+      }
+    }
+  }
+
+  if (!best) {
+    throw new Error('No hay combinación posible dentro del presupuesto. Sube el presupuesto o relaja los filtros.');
+  }
+
+  const { morning, lunch, afternoon, perPerson } = best;
+  const totalCost = perPerson * totalPeople;
   const remainingBudget = totalBudget - totalCost;
 
   return {
     date,
     zone,
     pace,
+    duration,
     organizer,
     companions,
     allUsers,

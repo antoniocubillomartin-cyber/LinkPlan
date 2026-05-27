@@ -18,11 +18,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.auth
-      .me()
-      .then((u) => setUser(u))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+    const minWait = new Promise((r) => setTimeout(r, 2000));
+    Promise.all([
+      api.auth
+        .me()
+        .then((u) => setUser(u))
+        .catch(() => setUser(null)),
+      minWait
+    ]).finally(() => setLoading(false));
   }, []);
 
   const logout = useCallback(async () => {

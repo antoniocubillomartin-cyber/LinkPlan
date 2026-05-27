@@ -7,9 +7,23 @@ import { LoginScreen } from '@/components/LoginScreen';
 import { useAuth } from '@/lib/authContext';
 import type { Plan, Reservation, User, Venue } from '@/types';
 
-const FOOD_TAGS = ['tradicional', 'italiano', 'vegetariano', 'vegano', 'rapido', 'asiatico', 'tapas', 'brunch', 'americano', 'vasco'];
-const ACTIVITY_TAGS = ['arte', 'monumentos', 'naturaleza', 'adrenalina', 'fotografía', 'cultura', 'historia', 'grupos', 'relax', 'deporte', 'gastronomia'];
+const FOOD_TAGS = [
+  'tradicional', 'tapas', 'español', 'italiano', 'pizza', 'pasta', 'asiatico', 'japones', 'sushi',
+  'mexicano', 'americano', 'hamburgesas', 'vegetariano', 'vegano', 'saludable', 'mediterraneo',
+  'pescado', 'brunch', 'cafe', 'postres', 'rapido', 'vasco', 'pintxos', 'birras', 'copas'
+];
+const ACTIVITY_TAGS = [
+  'arte', 'cultura', 'historia', 'monumentos', 'exposiciones', 'contemporaneo',
+  'naturaleza', 'paseo', 'relax', 'fotografía', 'vistas', 'gastronomia',
+  'fiestas', 'copas', 'birras', 'terraza', 'planes-noche', 'musica', 'conciertos',
+  'mercadillos', 'adrenalina', 'deporte', 'grupos', 'diversión'
+];
 const PACE_TAGS = ['relajado', 'moderado', 'intenso'] as const;
+const DURATIONS = [
+  { value: 'corto', label: 'Corto (2-3h)' },
+  { value: 'medio', label: 'Medio (medio día)' },
+  { value: 'largo', label: 'Largo (día entero)' }
+] as const;
 const ZONES = ['', 'Centro', 'Retiro', 'Malasaña', 'Chamberí', 'La Latina'];
 
 export default function Home() {
@@ -17,8 +31,17 @@ export default function Home() {
 
   if (authLoading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="text-sm text-[#9A9390]">Cargando…</p>
+      <main className="min-h-screen flex flex-col items-center justify-center gap-6">
+        <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-[#1A1714] text-3xl text-[#FAF7F2] shadow-lg animate-pulse">
+          🤝
+        </div>
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-[0.3em] text-[#B79B68]">LINK &amp; PLAN</p>
+          <p className="mt-1 display text-lg text-[#1A1714]">Preparando tu sesión…</p>
+        </div>
+        <div className="h-1 w-40 overflow-hidden rounded-full bg-[#EAE4D9]">
+          <div className="h-full w-1/2 animate-loader bg-[#1A1714]" />
+        </div>
       </main>
     );
   }
@@ -203,7 +226,11 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                           Eliminar
                         </button>
                       </div>
-                      <p className="text-xs text-[#9A9390]">Ritmo: {user.pace}</p>
+                      <div className="flex flex-wrap gap-1">
+                        {[...user.foodTags, ...user.activityTags].slice(0, 5).map((t) => (
+                          <span key={t} className="rounded-full bg-[#FAF7F2] px-2 py-0.5 text-[10px] text-[#6B5D4F]">{t}</span>
+                        ))}
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -320,8 +347,6 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
             <TagSelector tags={FOOD_TAGS} selected={foodTags} onToggle={(tag) => toggleTag(tag, foodTags, setFoodTags)} />
             <p className="mb-1 mt-3 text-sm">Actividades</p>
             <TagSelector tags={ACTIVITY_TAGS} selected={activityTags} onToggle={(tag) => toggleTag(tag, activityTags, setActivityTags)} />
-            <p className="mb-1 mt-3 text-sm">Ritmo</p>
-            <TagSelector tags={[...PACE_TAGS]} selected={[pace]} onToggle={(tag) => setPace(tag as typeof pace)} />
             <div className="mt-4 flex justify-end gap-2">
               <button className="rounded-lg border px-4 py-2" onClick={() => setShowModal(false)}>
                 Cancelar

@@ -4,14 +4,15 @@ const { venues, demoUsers } = require('../src/data/seedData');
 const prisma = new PrismaClient();
 
 async function main() {
-  await prisma.reservation.deleteMany();
-  await prisma.planParticipant.deleteMany();
-  await prisma.plan.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.venue.deleteMany();
+  for (const v of venues) {
+    await prisma.venue.upsert({ where: { id: v.id }, update: v, create: v });
+  }
 
-  await prisma.venue.createMany({ data: venues });
-  await prisma.user.createMany({ data: demoUsers });
+  for (const u of demoUsers) {
+    await prisma.user.upsert({ where: { id: u.id }, update: u, create: u });
+  }
+
+  console.log(`Seeded ${venues.length} venues, ${demoUsers.length} demo users (idempotent).`);
 }
 
 main()

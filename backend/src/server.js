@@ -44,7 +44,10 @@ const planSchema = z.object({
   companionIds: z.array(z.string()).default([]),
   budgetPerPerson: z.number().min(10).max(500).default(50),
   date: z.string().min(1),
-  zone: z.string().optional().default('')
+  zone: z.string().optional().default(''),
+  duration: z.enum(['corto', 'medio', 'largo']).optional().default('medio'),
+  excludeIds: z.array(z.string()).optional().default([]),
+  variantSeed: z.number().optional().default(0)
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -117,6 +120,9 @@ app.post('/api/plans/generate', async (req, res, next) => {
       budgetPerPerson: input.budgetPerPerson,
       date: input.date,
       zone: input.zone,
+      duration: input.duration,
+      excludeIds: input.excludeIds,
+      variantSeed: input.variantSeed,
       restaurants: venues.filter((v) => v.type === VenueType.RESTAURANT),
       activities: venues.filter((v) => v.type === VenueType.ACTIVITY)
     });

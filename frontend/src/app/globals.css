@@ -16,3 +16,11 @@ h3,
 .display {
   font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
 }
+
+@keyframes loader {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.animate-loader {
+  animation: loader 1.4s ease-in-out infinite;
+}
