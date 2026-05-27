@@ -40,7 +40,7 @@ const userSchema = z.object({
 });
 
 const planSchema = z.object({
-  organizerId: z.string().min(1),
+  organizerId: z.string().optional(),
   companionIds: z.array(z.string()).default([]),
   budgetPerPerson: z.number().min(10).max(500).default(50),
   date: z.string().min(1),
@@ -175,12 +175,14 @@ app.get('/api/admin/data', async (_req, res, next) => {
   }
 });
 
-app.post('/api/plans/generate', async (req, res, next) => {
+app.post('/api/plans/generate', requireAuth, async (req, res, next) => {
   try {
     const input = planSchema.parse(req.body);
-    const users = await prisma.user.findMany({ where: { id: { in: [input.organizerId, ...input.companionIds] } } });
-    const organizer = users.find((u) => u.id === input.organizerId);
-    const companions = users.filter((u) => input.companionIds.includes(u.id));
+    const organizerId = req.userId;
+    const ids = Array.from(new Set([organizerId, ...input.companionIds]));
+    const users = await prisma.user.findMany({ where: { id: { in: ids } } });
+    const organizer = users.find((u) => u.id === organizerId);
+    const companions = users.filter((u) => input.companionIds.includes(u.id) && u.id !== organizerId);
     const venues = await prisma.venue.findMany();
 
     const plan = generatePlan({

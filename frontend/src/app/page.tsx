@@ -72,13 +72,12 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
   const [activityTags, setActivityTags] = useState<string[]>([]);
   const [pace, setPace] = useState<(typeof PACE_TAGS)[number]>('moderado');
 
-  const [organizerId, setOrganizerId] = useState('');
   const [companionIds, setCompanionIds] = useState<string[]>([]);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [budget, setBudget] = useState(50);
   const [zone, setZone] = useState('');
 
-  const companions = useMemo(() => users.filter((u) => u.id !== organizerId), [users, organizerId]);
+  const companions = useMemo(() => users.filter((u) => u.id !== authUser.id), [users, authUser.id]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -96,16 +95,12 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
       setFriends(friendsData);
       const refreshedMe = usersData.find((u) => u.id === authUser.id);
       if (refreshedMe) setMe(refreshedMe);
-      if (!organizerId) {
-        const preferred = usersData.find((u) => u.id === authUser.id) ?? usersData[0];
-        if (preferred) setOrganizerId(preferred.id);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unexpected error');
     } finally {
       setLoading(false);
     }
-  }, [organizerId, authUser.id]);
+  }, [authUser.id]);
 
   useEffect(() => {
     void refresh();
@@ -143,15 +138,11 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
   }
 
   async function createPlan(opts?: { excludeIds?: string[] }) {
-    if (!organizerId) {
-      setError('Selecciona un organizador');
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
       const nextPlan = await api.generatePlan({
-        organizerId,
+        organizerId: authUser.id,
         companionIds,
         budgetPerPerson: budget,
         date,
@@ -162,6 +153,7 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
       });
       setPlan(nextPlan);
       setActive('generar');
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo generar el plan');
     } finally {
@@ -208,11 +200,16 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
   async function confirmPlan() {
     if (!plan) return;
     setSaving(true);
+    setError(null);
     try {
       await api.confirmReservation(plan.id);
-      setPlan(null);
-      setActive('planes');
+      const planId = plan.id;
       await refresh();
+      setPlan(null);
+      setExpandedPlanId(planId);
+      setActive('planes');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo confirmar la reserva');
     } finally {
       setSaving(false);
     }
@@ -300,16 +297,9 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
               <div className="grid gap-5 lg:grid-cols-2">
                 <div className="space-y-4 rounded-xl border border-[#EAE4D9] p-4">
                   <h2 className="font-semibold">Generador de Planes Inteligentes</h2>
-                  <label className="block text-sm">
-                    Organizador
-                    <select className="mt-1 w-full rounded-lg border p-2" value={organizerId} onChange={(e) => setOrganizerId(e.target.value)}>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="rounded-lg bg-[#FAF7F2] p-3 text-xs text-[#6B5D4F]">
+                    Organizado por <strong>{authUser.name}</strong> (tú) · selecciona acompañantes abajo
+                  </div>
                   <label className="block text-sm">
                     Fecha
                     <input type="date" className="mt-1 w-full rounded-lg border p-2" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -397,8 +387,16 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                         className="flex w-full items-center justify-between gap-3 text-left"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="display text-lg font-semibold">{new Date(p.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="display text-lg font-semibold">{new Date(p.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</p>
+                            {p.reservation ? (
+                              <span className="rounded-full bg-[#6B8F71] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white">
+                                Reservado · {p.reservation.code}
+                              </span>
+                            ) : null}
+                          </div>
                           <p className="truncate text-xs text-[#9A9390]">{statusLabel} · {p.participants.map((pp) => pp.user.name).join(', ')}</p>
+                          <p className="mt-1 truncate text-xs text-[#6B5D4F]">🌅 {p.morningVenue.name} · 🍽️ {p.lunchVenue.name} · ☀️ {p.afternoonVenue.name}</p>
                         </div>
                         <span className="text-xs text-[#9A9390]">{isExpanded ? '▲' : '▼'}</span>
                       </button>
