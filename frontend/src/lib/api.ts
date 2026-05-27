@@ -1,6 +1,6 @@
 import type { Plan, Reservation, User, Venue } from '@/types';
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
+const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://link-plan-api.onrender.com';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${path}`, {
