@@ -21,6 +21,7 @@ enum ReservationStatus {
 model User {
   id           String            @id @default(cuid())
   name         String
+  username     String?           @unique
   color        String
   foodTags     String[]          @default([])
   activityTags String[]          @default([])
@@ -28,43 +29,66 @@ model User {
   createdAt    DateTime          @default(now())
   plans        Plan[]            @relation("OrganizerPlans")
   participants PlanParticipant[]
+  credentials  Credential[]
+}
+
+model Credential {
+  id         String   @id
+  userId     String
+  publicKey  Bytes
+  counter    BigInt   @default(0)
+  transports String[] @default([])
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuthChallenge {
+  id        String   @id @default(cuid())
+  username  String
+  challenge String
+  kind      String
+  createdAt DateTime @default(now())
+
+  @@index([username, kind])
 }
 
 model Venue {
-  id             String   @id
+  id             String    @id
   name           String
   zone           String
   tags           String[]
   price          Int
   schedule       String
   url            String
-  available      Boolean  @default(true)
+  available      Boolean   @default(true)
   type           VenueType
-  morningPlans   Plan[]   @relation("MorningVenue")
-  lunchPlans     Plan[]   @relation("LunchVenue")
-  afternoonPlans Plan[]   @relation("AfternoonVenue")
+  morningPlans   Plan[]    @relation("MorningVenue")
+  lunchPlans     Plan[]    @relation("LunchVenue")
+  afternoonPlans Plan[]    @relation("AfternoonVenue")
 }
 
 model Plan {
-  id              String            @id @default(cuid())
-  date            DateTime
-  zone            String?
-  pace            String
-  budgetPerPerson Float
-  totalBudget     Float
-  totalCost       Float
-  remainingBudget Float
-  createdAt       DateTime          @default(now())
-  organizerId     String
-  organizer       User              @relation("OrganizerPlans", fields: [organizerId], references: [id], onDelete: Restrict)
-  morningVenueId  String
-  morningVenue    Venue             @relation("MorningVenue", fields: [morningVenueId], references: [id], onDelete: Restrict)
-  lunchVenueId    String
-  lunchVenue      Venue             @relation("LunchVenue", fields: [lunchVenueId], references: [id], onDelete: Restrict)
+  id               String            @id @default(cuid())
+  date             DateTime
+  zone             String?
+  pace             String
+  budgetPerPerson  Float
+  totalBudget      Float
+  totalCost        Float
+  remainingBudget  Float
+  createdAt        DateTime          @default(now())
+  organizerId      String
+  organizer        User              @relation("OrganizerPlans", fields: [organizerId], references: [id], onDelete: Restrict)
+  morningVenueId   String
+  morningVenue     Venue             @relation("MorningVenue", fields: [morningVenueId], references: [id], onDelete: Restrict)
+  lunchVenueId     String
+  lunchVenue       Venue             @relation("LunchVenue", fields: [lunchVenueId], references: [id], onDelete: Restrict)
   afternoonVenueId String
-  afternoonVenue  Venue             @relation("AfternoonVenue", fields: [afternoonVenueId], references: [id], onDelete: Restrict)
-  participants    PlanParticipant[]
-  reservation     Reservation?
+  afternoonVenue   Venue             @relation("AfternoonVenue", fields: [afternoonVenueId], references: [id], onDelete: Restrict)
+  participants     PlanParticipant[]
+  reservation      Reservation?
 }
 
 model PlanParticipant {
@@ -72,8 +96,8 @@ model PlanParticipant {
   planId String
   userId String
 
-  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([planId, userId])
 }

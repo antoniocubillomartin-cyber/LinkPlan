@@ -1,10 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const { z } = require('zod');
 const { PrismaClient, VenueType, ReservationStatus } = require('@prisma/client');
 const { generatePlan } = require('./services/planService');
 const { COLORS } = require('./data/seedData');
+const { createAuthRouter } = require('./auth');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -22,10 +24,13 @@ app.use(
         return;
       }
       callback(new Error('CORS origin not allowed'));
-    }
+    },
+    credentials: true
   })
 );
 app.use(express.json());
+app.use(cookieParser());
+app.use('/api/auth', createAuthRouter(prisma));
 
 const userSchema = z.object({
   name: z.string().min(1),

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { TagSelector } from '@/components/TagSelector';
+import { LoginScreen } from '@/components/LoginScreen';
+import { useAuth } from '@/lib/authContext';
 import type { Plan, Reservation, User, Venue } from '@/types';
 
 const FOOD_TAGS = ['tradicional', 'italiano', 'vegetariano', 'vegano', 'rapido', 'asiatico', 'tapas', 'brunch', 'americano', 'vasco'];
@@ -11,6 +13,22 @@ const PACE_TAGS = ['relajado', 'moderado', 'intenso'] as const;
 const ZONES = ['', 'Centro', 'Retiro', 'Malasaña', 'Chamberí', 'La Latina'];
 
 export default function Home() {
+  const { user: authUser, loading: authLoading, logout } = useAuth();
+
+  if (authLoading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="text-sm text-[#9A9390]">Cargando…</p>
+      </main>
+    );
+  }
+
+  if (!authUser) return <LoginScreen />;
+
+  return <App authUser={authUser} onLogout={logout} />;
+}
+
+function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<void> }) {
   const [users, setUsers] = useState<User[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [admin, setAdmin] = useState<{ restaurants: Venue[]; activities: Venue[]; stats: { plans: number; reservations: number } }>();
@@ -42,13 +60,16 @@ export default function Home() {
       setUsers(usersData);
       setReservations(reservationsData);
       setAdmin(adminData);
-      if (!organizerId && usersData[0]) setOrganizerId(usersData[0].id);
+      if (!organizerId) {
+        const preferred = usersData.find((u) => u.id === authUser.id) ?? usersData[0];
+        if (preferred) setOrganizerId(preferred.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unexpected error');
     } finally {
       setLoading(false);
     }
-  }, [organizerId]);
+  }, [organizerId, authUser.id]);
 
   useEffect(() => {
     void refresh();
@@ -120,7 +141,7 @@ export default function Home() {
     <main className="min-h-screen p-6 lg:p-8">
       <div className="mx-auto max-w-7xl rounded-2xl border border-[#EAE4D9] bg-white shadow-sm">
         <div className="grid min-h-[80vh] grid-cols-1 lg:grid-cols-[260px_1fr]">
-          <aside className="border-b border-[#EAE4D9] p-5 lg:border-b-0 lg:border-r">
+          <aside className="flex flex-col border-b border-[#EAE4D9] p-5 lg:border-b-0 lg:border-r">
             <p className="display text-xl font-semibold">🤝 Link & Plan</p>
             <p className="mt-1 text-xs text-[#9A9390]">Planificador de Ocio Compartido</p>
             <div className="mt-5 grid gap-2">
@@ -138,6 +159,26 @@ export default function Home() {
                   {label}
                 </button>
               ))}
+            </div>
+            <div className="mt-auto pt-6 border-t border-[#EAE4D9] mt-6">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white"
+                  style={{ backgroundColor: authUser.color }}
+                >
+                  {authUser.name.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{authUser.name}</p>
+                  <p className="truncate text-xs text-[#9A9390]">@{authUser.username}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => void onLogout()}
+                className="mt-3 w-full rounded-lg border border-[#EAE4D9] px-3 py-2 text-xs text-[#6B5D4F] hover:bg-[#FAF7F2]"
+              >
+                Cerrar sesión
+              </button>
             </div>
           </aside>
 

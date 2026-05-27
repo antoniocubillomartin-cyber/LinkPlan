@@ -23,3 +23,11 @@ services:
         sync: false
       - key: NODE_VERSION
         value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RP_ID
+        value: link-plan-frontend-dts4.vercel.app
+      - key: RP_ORIGIN
+        value: https://link-plan-frontend-dts4.vercel.app
