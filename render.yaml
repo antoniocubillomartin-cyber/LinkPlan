@@ -28,6 +28,6 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: RP_ID
-        value: link-plan-frontend-dts4.vercel.app
+        value: link-plan-frontend.vercel.app
       - key: RP_ORIGIN
-        value: https://link-plan-frontend-dts4.vercel.app
+        value: https://link-plan-frontend.vercel.app,https://link-plan-frontend-dts4.vercel.app

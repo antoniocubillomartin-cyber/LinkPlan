@@ -11,7 +11,7 @@ const { createAuthRouter } = require('./auth');
 const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 4000;
-const allowedOrigins = (process.env.FRONTEND_URL || 'https://link-plan-frontend-dts4.vercel.app,http://localhost:3000')
+const allowedOrigins = (process.env.FRONTEND_URL || 'https://link-plan-frontend.vercel.app,https://link-plan-frontend-dts4.vercel.app,http://localhost:3000')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
