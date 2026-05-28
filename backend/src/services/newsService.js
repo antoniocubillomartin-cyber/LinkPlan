@@ -2,8 +2,10 @@ const { XMLParser } = require('fast-xml-parser');
 
 const SOURCES = {
   esmadrid: 'https://www.esmadrid.com/opendata/agenda_v1_es.xml',
-  madridsecreto: 'https://madridsecreto.co/feed/'
+  madridsecreto: 'https://madridsecreto.co/feed/',
+  entradas: 'https://www.entradas.com/city/madrid-370/conciertos-y-festivales-85/'
 };
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
 // Lista blanca: SOLO se muestran noticias cuyo enlace pertenezca a estas webs.
 // Cualquier item con URL de otro dominio se descarta (no se "inventan" webs).
@@ -101,7 +103,7 @@ async function fetchText(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'GatosYCanas/1.0' } });
+    const res = await fetch(url, { signal: controller.signal, redirect: 'follow', headers: { 'User-Agent': BROWSER_UA } });
     if (!res.ok) throw new Error(`${url} → ${res.status}`);
     return await res.text();
   } finally {
@@ -179,29 +181,100 @@ function normalizeMadridSecreto(xml) {
   });
 }
 
+// Entradas.com renderiza los conciertos como JSON-LD (schema.org/ItemList → MusicEvent).
+function normalizeEntradas(html) {
+  const blocks = [...String(html || '').matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  const events = [];
+  for (const block of blocks) {
+    let json;
+    try {
+      json = JSON.parse(block[1].trim());
+    } catch {
+      continue;
+    }
+    const nodes = Array.isArray(json) ? json : [json];
+    const lists = [];
+    for (const node of nodes) {
+      if (node && node['@type'] === 'ItemList') lists.push(node);
+      for (const g of asArray(node?.['@graph'])) if (g && g['@type'] === 'ItemList') lists.push(g);
+    }
+    for (const list of lists) {
+      for (const li of asArray(list.itemListElement)) {
+        const ev = li && li.item ? li.item : li;
+        if (!ev || !ev.name) continue;
+        const rawStart = typeof ev.startDate === 'string' ? ev.startDate : null;
+        const offers = Array.isArray(ev.offers) ? ev.offers[0] : ev.offers;
+        const url = (offers && typeof offers.url === 'string' && offers.url) || (typeof ev.url === 'string' ? ev.url : null);
+        const venue = ev.location && ev.location.name ? decodeEntities(textOf(ev.location.name)) : null;
+        const lowPrice = offers && offers.lowPrice != null ? Number(offers.lowPrice) : null;
+        const start = rawStart ? new Date(rawStart) : null;
+        const end = typeof ev.endDate === 'string' ? new Date(ev.endDate) : null;
+        events.push({
+          id: `entradas-${url || ev.name}`,
+          source: 'Entradas',
+          title: decodeEntities(String(ev.name)),
+          category: '🎵 Conciertos',
+          description: venue ? `Concierto en ${venue}` : 'Concierto y festivales en Madrid',
+          date: rawStart ? rawStart.slice(0, 10) : null,
+          time: rawStart && rawStart.length >= 16 ? rawStart.slice(11, 16) : null,
+          free: false,
+          price: lowPrice != null && !Number.isNaN(lowPrice) ? `Desde ${Math.round(lowPrice)}€` : null,
+          venue,
+          url,
+          image: null,
+          score: scoreByProximity(start && !Number.isNaN(start.getTime()) ? start : null, end && !Number.isNaN(end.getTime()) ? end : null)
+        });
+      }
+    }
+  }
+  return events;
+}
+
+// Reparte las noticias en round-robin por fuente para que el feed alterne entre
+// webs (esMadrid / Madrid Secreto / Entradas) en lugar de que domine una sola.
+function interleaveBySource(items) {
+  const groups = new Map();
+  for (const item of items) {
+    if (!groups.has(item.source)) groups.set(item.source, []);
+    groups.get(item.source).push(item);
+  }
+  const queues = [...groups.values()];
+  const result = [];
+  let pushed = true;
+  while (pushed) {
+    pushed = false;
+    for (const queue of queues) {
+      const next = queue.shift();
+      if (next) {
+        result.push(next);
+        pushed = true;
+      }
+    }
+  }
+  return result;
+}
+
 async function loadItems() {
   if (cache.items.length && Date.now() - cache.at < CACHE_TTL_MS) return cache.items;
 
-  const [esmadridXml, madridsecretoXml] = await Promise.all([
+  const [esmadridXml, madridsecretoXml, entradasHtml] = await Promise.all([
     fetchText(SOURCES.esmadrid).catch(() => null),
-    fetchText(SOURCES.madridsecreto).catch(() => null)
+    fetchText(SOURCES.madridsecreto).catch(() => null),
+    fetchText(SOURCES.entradas).catch(() => null)
   ]);
 
   let items = [];
-  if (esmadridXml) {
+  const collect = (raw, normalizer) => {
+    if (!raw) return;
     try {
-      items = items.concat(normalizeEsMadrid(esmadridXml));
+      items = items.concat(normalizer(raw));
     } catch {
       /* feed con formato inesperado: se ignora */
     }
-  }
-  if (madridsecretoXml) {
-    try {
-      items = items.concat(normalizeMadridSecreto(madridsecretoXml));
-    } catch {
-      /* ignore */
-    }
-  }
+  };
+  collect(esmadridXml, normalizeEsMadrid);
+  collect(madridsecretoXml, normalizeMadridSecreto);
+  collect(entradasHtml, normalizeEntradas);
 
   const seen = new Set();
   items = items
@@ -213,6 +286,8 @@ async function loadItems() {
       return true;
     })
     .sort((a, b) => b.score - a.score || (b.date || '').localeCompare(a.date || ''));
+
+  items = interleaveBySource(items);
 
   if (items.length) cache = { at: Date.now(), items };
   return items;
