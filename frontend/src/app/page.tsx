@@ -298,7 +298,7 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
         <header className="relative flex flex-col items-center gap-2 border-b border-[#D8E3F2] bg-gradient-to-b from-[#EAF1FB] to-white px-6 py-7 text-center">
           <div className="flex items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo_vector.png" alt="Gatos y Cañas" className="h-28 w-auto object-contain drop-shadow-sm" />
+            <img src="/logo_vector.png" alt="Gatos y Cañas" className="h-[10.5rem] w-auto object-contain drop-shadow-sm" />
             <span className="display text-4xl font-bold tracking-wide text-[#0A2E6E]">Gatos y Cañas</span>
           </div>
           <span className="absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-r from-[#0E4DA4] via-[#3B82D6] to-[#0A2E6E]" />
