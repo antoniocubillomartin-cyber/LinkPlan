@@ -68,14 +68,18 @@ export function LoginScreen() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-sm border border-[#EFE9E0] p-8">
-        <div className="mb-6">
-          <p className="text-xs uppercase tracking-widest text-[#B79B68]">GATOS Y CAÑAS</p>
-          <h1 className="text-3xl font-semibold mt-1">Entra con tu huella</h1>
-          <p className="text-sm text-[#6B5D4F] mt-2">
-            Sin contraseñas. Sin emails. Tu dispositivo guarda una clave única que solo se desbloquea con tu huella, Face ID o PIN.
-          </p>
-        </div>
+      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-[#EFE9E0] bg-white shadow-xl shadow-[#1A1714]/5">
+        <div className="h-1.5 bg-gradient-to-r from-[#C4673A] via-[#E0A258] to-[#6B8F71]" />
+        <div className="p-8">
+          <div className="mb-6 flex flex-col items-center text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="Gatos y Cañas" className="h-16 w-auto object-contain" />
+            <p className="mt-2 text-xs uppercase tracking-[0.28em] text-[#B79B68]">Gatos y Cañas</p>
+            <h1 className="mt-1 text-3xl font-semibold">Entra con tu huella</h1>
+            <p className="mt-2 text-sm text-[#6B5D4F]">
+              Sin contraseñas. Sin emails. Tu dispositivo guarda una clave única que solo se desbloquea con tu huella, Face ID o PIN.
+            </p>
+          </div>
 
         {mode !== 'register' ? (
           <form onSubmit={handleContinue} className="space-y-4">
@@ -134,7 +138,8 @@ export function LoginScreen() {
           </form>
         )}
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        </div>
       </div>
     </div>
   );

@@ -86,6 +86,11 @@ export const api = {
   deletePlan: (id: string) => request<void>(`/api/plans/${id}`, { method: 'DELETE' }),
   confirmReservation: (planId: string) => request<{ id: string }>('/api/reservations', { method: 'POST', body: JSON.stringify({ planId }) }),
   adminData: () => request<{ restaurants: Venue[]; activities: Venue[]; stats: { plans: number; reservations: number } }>('/api/admin/data'),
+  validateUrls: () =>
+    request<{ checkedAt: string; total: number; valid: number; broken: number; brokenList: { id: string; name: string; url: string; statusCode: number | null; error: string | null }[] }>(
+      '/api/venues/validate-urls',
+      { method: 'POST' }
+    ),
   trendingCategories: (limit = 3) => request<TrendingCategories>(`/api/trends/categories?limit=${limit}`),
   auth: {
     me: () => request<User>('/api/auth/me'),

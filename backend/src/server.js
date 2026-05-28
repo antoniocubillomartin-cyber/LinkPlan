@@ -6,6 +6,7 @@ const { z } = require('zod');
 const { PrismaClient, VenueType, ReservationStatus } = require('@prisma/client');
 const { generatePlan, pickPace } = require('./services/planService');
 const { computePlanSuggestions } = require('./services/suggestionService');
+const { validateAllVenues } = require('./services/urlValidationService');
 const { COLORS } = require('./data/seedData');
 const { createAuthRouter, requireAuth } = require('./auth');
 
@@ -201,6 +202,15 @@ app.get('/api/venues', async (req, res, next) => {
     const type = req.query.type === 'ACTIVITY' ? VenueType.ACTIVITY : req.query.type === 'RESTAURANT' ? VenueType.RESTAURANT : undefined;
     const venues = await prisma.venue.findMany({ where: { type }, orderBy: { name: 'asc' } });
     res.json(venues);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/venues/validate-urls', requireAuth, async (_req, res, next) => {
+  try {
+    const summary = await validateAllVenues(prisma);
+    res.json(summary);
   } catch (err) {
     next(err);
   }

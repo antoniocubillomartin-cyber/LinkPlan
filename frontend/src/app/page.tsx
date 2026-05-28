@@ -72,6 +72,8 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
   const [users, setUsers] = useState<User[]>([]);
   const [myPlans, setMyPlans] = useState<StoredPlan[]>([]);
   const [suggestions, setSuggestions] = useState<Record<string, PlanSuggestion[]>>({});
+  const [validatingUrls, setValidatingUrls] = useState(false);
+  const [urlSummary, setUrlSummary] = useState<{ total: number; valid: number; broken: number } | null>(null);
   const [admin, setAdmin] = useState<{ restaurants: Venue[]; activities: Venue[]; stats: { plans: number; reservations: number } }>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -261,32 +263,52 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
     }
   }
 
+  async function runUrlValidation() {
+    setValidatingUrls(true);
+    setError(null);
+    try {
+      const summary = await api.validateUrls();
+      setUrlSummary({ total: summary.total, valid: summary.valid, broken: summary.broken });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudieron verificar los enlaces');
+    } finally {
+      setValidatingUrls(false);
+    }
+  }
+
   return (
-    <main className="min-h-screen p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl rounded-2xl border border-[#EAE4D9] bg-white shadow-sm">
-        <header className="flex flex-col items-center gap-1 border-b border-[#EAE4D9] px-6 py-5 text-center">
+    <main className="min-h-screen p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl overflow-hidden rounded-3xl border border-[#EAE4D9] bg-white/95 shadow-xl shadow-[#1A1714]/5 backdrop-blur">
+        <header className="relative flex flex-col items-center gap-1 border-b border-[#EAE4D9] bg-gradient-to-b from-[#FBF3E6] to-white px-6 py-6 text-center">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Gatos y Cañas" className="h-14 w-auto object-contain" />
-            <span className="display text-2xl font-semibold">Gatos y Cañas</span>
+            <img src="/logo.png" alt="Gatos y Cañas" className="h-14 w-auto object-contain drop-shadow-sm" />
+            <span className="display text-3xl font-semibold">Gatos y Cañas</span>
           </div>
-          <p className="text-xs text-[#9A9390]">Planificador de Ocio Compartido</p>
+          <p className="text-[11px] uppercase tracking-[0.28em] text-[#B79B68]">Planificador de ocio compartido</p>
+          <span className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-[#C4673A] via-[#E0A258] to-[#6B8F71]" />
         </header>
-        <div className="grid min-h-[80vh] grid-cols-1 lg:grid-cols-[260px_1fr]">
-          <aside className="flex flex-col border-b border-[#EAE4D9] p-5 lg:border-b-0 lg:border-r">
-            <div className="grid gap-2">
-              {[
-                ['perfil', 'Mi Usuario'],
-                ['usuarios', 'Gestión de Usuarios'],
-                ['generar', 'Generar Plan'],
-                ['planes', 'Mis Planes y Reservas'],
-                ['datos', 'Panel de Datos']
-              ].map(([key, label]) => (
+        <div className="grid min-h-[80vh] grid-cols-1 lg:grid-cols-[264px_1fr]">
+          <aside className="flex flex-col border-b border-[#EAE4D9] bg-[#FCFAF5] p-5 lg:border-b-0 lg:border-r">
+            <div className="grid gap-1.5">
+              {([
+                ['perfil', 'Mi Usuario', '🐱'],
+                ['usuarios', 'Gestión de Usuarios', '👥'],
+                ['generar', 'Generar Plan', '✨'],
+                ['planes', 'Mis Planes y Reservas', '🗓️'],
+                ['datos', 'Panel de Datos', '📊']
+              ] as const).map(([key, label, icon]) => (
                 <button
                   key={key}
-                  className={`rounded-xl px-3 py-2 text-left text-sm font-medium ${active === key ? 'bg-[#1A1714] text-[#FAF7F2]' : 'hover:bg-[#E8DCC8]'}`}
+                  className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                    active === key
+                      ? 'bg-[#1A1714] text-[#FAF7F2] shadow-sm shadow-[#1A1714]/20'
+                      : 'text-[#6B5D4F] hover:bg-[#F1E7D6]'
+                  }`}
                   onClick={() => setActive(key as typeof active)}
                 >
+                  <span className="text-base">{icon}</span>
                   {label}
                 </button>
               ))}
@@ -318,51 +340,88 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
             {loading ? <p className="text-sm text-[#9A9390]">Cargando datos...</p> : null}
 
             {active === 'usuarios' ? (
-              <div>
+              <div className="animate-in">
                 <div className="mb-5 flex items-center justify-between">
-                  <h1 className="text-2xl font-semibold">Perfiles y Gustos</h1>
-                  <button className="rounded-lg bg-[#1A1714] px-4 py-2 text-sm font-medium text-white" onClick={() => setShowModal(true)}>
-                    Nuevo Usuario
+                  <div>
+                    <h1 className="text-2xl font-semibold">Perfiles y Gustos</h1>
+                    <p className="mt-0.5 text-sm text-[#9A8F80]">{users.length} {users.length === 1 ? 'persona' : 'personas'} en la comunidad</p>
+                  </div>
+                  <button
+                    className="rounded-xl bg-[#1A1714] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-black"
+                    onClick={() => setShowModal(true)}
+                  >
+                    + Nuevo Usuario
                   </button>
                 </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {users.map((user) => (
-                    <article key={user.id} className="rounded-xl border border-[#EAE4D9] p-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="font-semibold">{user.name}</p>
-                        <button className="text-xs text-red-500" onClick={() => void removeUser(user.id)}>
-                          Eliminar
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {[...user.foodTags, ...user.activityTags].slice(0, 5).map((t) => (
-                          <span key={t} className="rounded-full bg-[#FAF7F2] px-2 py-0.5 text-[10px] text-[#6B5D4F]">{t}</span>
-                        ))}
-                      </div>
-                    </article>
-                  ))}
-                </div>
+                {users.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#E0D6C2] bg-[#FCFAF5] p-10 text-center">
+                    <p className="text-3xl">🐱🍺</p>
+                    <p className="mt-2 font-medium">Aún no hay nadie por aquí</p>
+                    <p className="text-sm text-[#9A8F80]">Crea el primer perfil para empezar a planear.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {users.map((user) => (
+                      <article
+                        key={user.id}
+                        className="group rounded-2xl border border-[#EAE4D9] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[#E0A258] hover:shadow-md hover:shadow-[#E0A258]/10"
+                      >
+                        <div className="mb-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white shadow-sm"
+                              style={{ backgroundColor: user.color }}
+                            >
+                              {user.name.slice(0, 1).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold">{user.name}</p>
+                              {user.username ? <p className="truncate text-xs text-[#9A8F80]">@{user.username}</p> : null}
+                            </div>
+                          </div>
+                          <button
+                            className="rounded-lg px-2 py-1 text-xs text-[#C0857A] opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                            onClick={() => void removeUser(user.id)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {[...user.foodTags, ...user.activityTags].slice(0, 6).map((t) => (
+                            <span key={t} className="rounded-full bg-[#F3EADB] px-2 py-0.5 text-[10px] font-medium text-[#8A7A5E]">{t}</span>
+                          ))}
+                          {[...user.foodTags, ...user.activityTags].length === 0 ? (
+                            <span className="text-[10px] text-[#B7AE9E]">Sin gustos todavía</span>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : null}
 
             {active === 'generar' ? (
-              <div className="grid gap-5 lg:grid-cols-2">
-                <div className="space-y-4 rounded-xl border border-[#EAE4D9] p-4">
-                  <h2 className="font-semibold">Generador de Planes Inteligentes</h2>
-                  <div className="rounded-lg bg-[#FAF7F2] p-3 text-xs text-[#6B5D4F]">
-                    Organizado por <strong>{authUser.name}</strong> (tú) · selecciona acompañantes abajo
+              <div className="grid animate-in gap-5 lg:grid-cols-2">
+                <div className="space-y-4 rounded-2xl border border-[#EAE4D9] bg-white p-5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">✨</span>
+                    <h2 className="display text-lg font-semibold">Generador de planes</h2>
+                  </div>
+                  <div className="rounded-xl border border-[#F0E3CC] bg-[#FBF3E6] p-3 text-xs text-[#8A7A5E]">
+                    Organizado por <strong>{authUser.name}</strong> (tú) · elige acompañantes abajo
                   </div>
                   <label className="block text-sm">
                     Fecha
-                    <input type="date" className="mt-1 w-full rounded-lg border p-2" value={date} onChange={(e) => setDate(e.target.value)} />
+                    <input type="date" className="mt-1 w-full rounded-xl border border-[#E5DBC8] bg-white p-2.5 outline-none transition focus:border-[#C4673A] focus:ring-2 focus:ring-[#C4673A]/15" value={date} onChange={(e) => setDate(e.target.value)} />
                   </label>
                   <label className="block text-sm">
                     Presupuesto por persona (€)
-                    <input type="number" min={10} max={500} className="mt-1 w-full rounded-lg border p-2" value={budget} onChange={(e) => setBudget(Number(e.target.value || 50))} />
+                    <input type="number" min={10} max={500} className="mt-1 w-full rounded-xl border border-[#E5DBC8] bg-white p-2.5 outline-none transition focus:border-[#C4673A] focus:ring-2 focus:ring-[#C4673A]/15" value={budget} onChange={(e) => setBudget(Number(e.target.value || 50))} />
                   </label>
                   <label className="block text-sm">
                     Zona
-                    <select className="mt-1 w-full rounded-lg border p-2" value={zone} onChange={(e) => setZone(e.target.value)}>
+                    <select className="mt-1 w-full rounded-xl border border-[#E5DBC8] bg-white p-2.5 outline-none transition focus:border-[#C4673A] focus:ring-2 focus:ring-[#C4673A]/15" value={zone} onChange={(e) => setZone(e.target.value)}>
                       {ZONES.map((z) => (
                         <option key={z} value={z}>
                           {z || 'Sin preferencia'}
@@ -372,7 +431,7 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                   </label>
                   <label className="block text-sm">
                     Duración
-                    <select className="mt-1 w-full rounded-lg border p-2" value={duration} onChange={(e) => setDuration(e.target.value as typeof duration)}>
+                    <select className="mt-1 w-full rounded-xl border border-[#E5DBC8] bg-white p-2.5 outline-none transition focus:border-[#C4673A] focus:ring-2 focus:ring-[#C4673A]/15" value={duration} onChange={(e) => setDuration(e.target.value as typeof duration)}>
                       {DURATIONS.map((d) => (
                         <option key={d.value} value={d.value}>{d.label}</option>
                       ))}
@@ -386,26 +445,40 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                       </p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        {companions.map((u) => (
-                          <button
-                            key={u.id}
-                            type="button"
-                            onClick={() => toggleTag(u.id, companionIds, setCompanionIds)}
-                            className={`rounded-full border px-3 py-1 text-sm ${companionIds.includes(u.id) ? 'bg-[#1A1714] text-white' : ''}`}
-                          >
-                            {u.name}
-                          </button>
-                        ))}
+                        {companions.map((u) => {
+                          const picked = companionIds.includes(u.id);
+                          return (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onClick={() => toggleTag(u.id, companionIds, setCompanionIds)}
+                              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition ${
+                                picked ? 'border-[#1A1714] bg-[#1A1714] text-white' : 'border-[#E5DBC8] hover:border-[#C4673A] hover:text-[#C4673A]'
+                              }`}
+                            >
+                              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: u.color }} />
+                              {u.name}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
-                  <button disabled={saving} className="w-full rounded-lg bg-[#1A1714] px-4 py-2 text-sm font-medium text-white disabled:opacity-50" onClick={() => void createPlan()}>
-                    {saving ? 'Generando...' : 'Generar Plan'}
+                  <button
+                    disabled={saving}
+                    className="w-full rounded-xl bg-gradient-to-r from-[#C4673A] to-[#E0A258] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-50"
+                    onClick={() => void createPlan()}
+                  >
+                    {saving ? 'Generando…' : '✨ Generar Plan'}
                   </button>
                 </div>
-                <div className="rounded-xl border border-[#EAE4D9] p-4">
+                <div className="rounded-2xl border border-[#EAE4D9] bg-white p-5">
                   {!plan ? (
-                    <p className="text-sm text-[#9A9390]">Tu itinerario aparecerá aquí.</p>
+                    <div className="flex h-full min-h-[280px] flex-col items-center justify-center rounded-xl border border-dashed border-[#E0D6C2] bg-[#FCFAF5] p-8 text-center">
+                      <p className="text-3xl">🗺️</p>
+                      <p className="mt-2 font-medium">Tu itinerario aparecerá aquí</p>
+                      <p className="text-sm text-[#9A8F80]">Configura el plan a la izquierda y pulsa Generar.</p>
+                    </div>
                   ) : (
                     <div className="space-y-3 text-sm">
                       <div className="flex items-center justify-between">
@@ -455,10 +528,23 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
             ) : null}
 
             {active === 'planes' ? (
-              <div className="space-y-3">
-                <h1 className="text-2xl font-semibold">Mis Planes y Reservas</h1>
+              <div className="animate-in space-y-3">
+                <div>
+                  <h1 className="text-2xl font-semibold">Mis Planes y Reservas</h1>
+                  <p className="mt-0.5 text-sm text-[#9A8F80]">{myPlans.length} {myPlans.length === 1 ? 'plan' : 'planes'} guardado{myPlans.length === 1 ? '' : 's'}</p>
+                </div>
                 {myPlans.length === 0 ? (
-                  <p className="text-sm text-[#9A9390]">Aún no tienes planes. Crea uno en la sección Generar Plan.</p>
+                  <div className="rounded-2xl border border-dashed border-[#E0D6C2] bg-[#FCFAF5] p-10 text-center">
+                    <p className="text-3xl">🗓️</p>
+                    <p className="mt-2 font-medium">Aún no tienes planes guardados</p>
+                    <p className="text-sm text-[#9A8F80]">Crea uno en <strong>Generar Plan</strong> y confírmalo para verlo aquí.</p>
+                    <button
+                      className="mt-4 rounded-xl bg-[#1A1714] px-4 py-2 text-sm font-medium text-white transition hover:bg-black"
+                      onClick={() => setActive('generar')}
+                    >
+                      ✨ Generar un plan
+                    </button>
+                  </div>
                 ) : null}
                 {myPlans.map((p) => {
                   const isExpanded = expandedPlanId === p.id;
@@ -466,7 +552,7 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                   const planSuggestions = suggestions[p.id] ?? [];
                   const statusLabel = p.status === 'COMPLETED' ? '✅ Completado' : p.status === 'CANCELLED' ? '✖ Cancelado' : '🟢 Activo';
                   return (
-                    <article key={p.id} className={`rounded-xl border p-4 text-sm transition ${isExpanded ? 'border-[#1A1714]' : 'border-[#EAE4D9]'} ${p.status === 'COMPLETED' ? 'opacity-70' : ''}`}>
+                    <article key={p.id} className={`rounded-2xl border bg-white p-4 text-sm transition ${isExpanded ? 'border-[#C4673A] shadow-md shadow-[#C4673A]/10' : 'border-[#EAE4D9] hover:border-[#E0A258]'} ${p.status === 'COMPLETED' ? 'opacity-70' : ''}`}>
                       <button
                         type="button"
                         onClick={() => setExpandedPlanId(isExpanded ? null : p.id)}
@@ -617,44 +703,112 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
             ) : null}
 
             {active === 'datos' ? (
-              <div className="space-y-4">
-                <h1 className="text-2xl font-semibold">Panel de Datos</h1>
-                <p className="text-sm text-[#9A9390]">Planes: {admin?.stats.plans ?? 0} · Reservas: {admin?.stats.reservations ?? 0}</p>
-                {(() => {
-                  const allVenues = [...(admin?.restaurants ?? []), ...(admin?.activities ?? [])];
-                  const checked = allVenues.filter((v) => v.lastVerified);
-                  const broken = allVenues.filter((v) => v.urlValid === false);
-                  return (
-                    <div className="rounded-xl border border-[#EAE4D9] p-3 text-sm">
-                      <p className="font-medium">Estado de enlaces</p>
-                      {checked.length === 0 ? (
-                        <p className="mt-1 text-xs text-[#9A9390]">Sin verificar todavía. Ejecuta <code>npm run validate:urls</code> en el backend.</p>
-                      ) : (
-                        <>
-                          <p className="mt-1 text-xs text-[#9A9390]">
-                            Verificados {checked.length}/{allVenues.length} · {broken.length} caído{broken.length === 1 ? '' : 's'}
-                          </p>
-                          {broken.length > 0 ? (
-                            <ul className="mt-2 space-y-1 text-xs text-red-600">
-                              {broken.map((v) => (
-                                <li key={v.id}>⚠️ {v.name} — {v.lastStatusCode ?? 'sin respuesta'} · <a className="underline" href={v.url} target="_blank" rel="noreferrer">{v.url}</a></li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
+              (() => {
+                const allVenues = [...(admin?.restaurants ?? []), ...(admin?.activities ?? [])];
+                const checked = allVenues.filter((v) => v.lastVerified);
+                const broken = allVenues.filter((v) => v.urlValid === false);
+                const okLinks = allVenues.filter((v) => v.urlValid === true).length;
+
+                const stats: { label: string; value: number; icon: string; from: string; to: string }[] = [
+                  { label: 'Planes', value: admin?.stats.plans ?? 0, icon: '🗓️', from: '#C4673A', to: '#E0A258' },
+                  { label: 'Reservas', value: admin?.stats.reservations ?? 0, icon: '✅', from: '#6B8F71', to: '#8FB596' },
+                  { label: 'Restaurantes', value: admin?.restaurants.length ?? 0, icon: '🍽️', from: '#1A1714', to: '#4A413A' },
+                  { label: 'Actividades', value: admin?.activities.length ?? 0, icon: '🎟️', from: '#B79B68', to: '#D9C29A' }
+                ];
+
+                const urlBadge = (v: Venue) =>
+                  v.urlValid === true ? (
+                    <span className="rounded-full bg-[#E8F1E9] px-2 py-0.5 text-[10px] font-medium text-[#3F6B4A]">✓ ok</span>
+                  ) : v.urlValid === false ? (
+                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600">⚠ {v.lastStatusCode ?? 'caído'}</span>
+                  ) : (
+                    <span className="rounded-full bg-[#F1ECE3] px-2 py-0.5 text-[10px] font-medium text-[#A89C88]">sin verificar</span>
                   );
-                })()}
-                <details className="rounded-xl border border-[#EAE4D9] p-3">
-                  <summary className="cursor-pointer font-medium">Restaurantes ({admin?.restaurants.length ?? 0})</summary>
-                  <pre className="mt-2 overflow-auto text-xs">{JSON.stringify(admin?.restaurants ?? [], null, 2)}</pre>
-                </details>
-                <details className="rounded-xl border border-[#EAE4D9] p-3">
-                  <summary className="cursor-pointer font-medium">Actividades ({admin?.activities.length ?? 0})</summary>
-                  <pre className="mt-2 overflow-auto text-xs">{JSON.stringify(admin?.activities ?? [], null, 2)}</pre>
-                </details>
-              </div>
+
+                const VenueList = ({ title, items }: { title: string; items: Venue[] }) => (
+                  <div className="rounded-2xl border border-[#EAE4D9] bg-white p-4">
+                    <p className="mb-3 flex items-center justify-between text-sm font-semibold">
+                      {title}
+                      <span className="text-xs font-normal text-[#9A8F80]">{items.length}</span>
+                    </p>
+                    <div className="thin-scroll max-h-80 space-y-1.5 overflow-auto pr-1">
+                      {items.map((v) => (
+                        <a
+                          key={v.id}
+                          href={v.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between gap-2 rounded-lg border border-transparent px-2 py-1.5 transition hover:border-[#EAE4D9] hover:bg-[#FCFAF5]"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm">{v.name}</span>
+                            <span className="block truncate text-[11px] text-[#9A8F80]">{v.zone} · {v.price === 0 ? 'Gratis' : `${v.price}€`}</span>
+                          </span>
+                          {urlBadge(v)}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                );
+
+                return (
+                  <div className="animate-in space-y-5">
+                    <h1 className="text-2xl font-semibold">Panel de Datos</h1>
+
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      {stats.map((s) => (
+                        <div
+                          key={s.label}
+                          className="rounded-2xl p-4 text-white shadow-sm"
+                          style={{ backgroundImage: `linear-gradient(135deg, ${s.from}, ${s.to})` }}
+                        >
+                          <p className="text-2xl">{s.icon}</p>
+                          <p className="mt-1 display text-3xl font-semibold leading-none">{s.value}</p>
+                          <p className="mt-1 text-xs uppercase tracking-wider opacity-80">{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="rounded-2xl border border-[#EAE4D9] bg-white p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">Estado de los enlaces</p>
+                          <p className="text-xs text-[#9A8F80]">
+                            {checked.length === 0
+                              ? 'Todavía no se han verificado los enlaces de los locales.'
+                              : `${okLinks} ok · ${broken.length} caído${broken.length === 1 ? '' : 's'} · ${checked.length}/${allVenues.length} verificados`}
+                          </p>
+                          {urlSummary ? (
+                            <p className="mt-1 text-xs text-[#6B8F71]">Última verificación: {urlSummary.valid}/{urlSummary.total} ok.</p>
+                          ) : null}
+                        </div>
+                        <button
+                          disabled={validatingUrls}
+                          onClick={() => void runUrlValidation()}
+                          className="rounded-xl bg-[#1A1714] px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:opacity-50"
+                        >
+                          {validatingUrls ? 'Verificando…' : '🔗 Verificar enlaces'}
+                        </button>
+                      </div>
+                      {broken.length > 0 ? (
+                        <ul className="mt-3 space-y-1 border-t border-[#F1ECE3] pt-3 text-xs text-red-600">
+                          {broken.map((v) => (
+                            <li key={v.id}>
+                              ⚠️ {v.name} — {v.lastStatusCode ?? 'sin respuesta'} ·{' '}
+                              <a className="underline" href={v.url} target="_blank" rel="noreferrer">{v.url}</a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <VenueList title="Restaurantes" items={admin?.restaurants ?? []} />
+                      <VenueList title="Actividades" items={admin?.activities ?? []} />
+                    </div>
+                  </div>
+                );
+              })()
             ) : null}
           </section>
         </div>

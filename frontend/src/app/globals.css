@@ -7,20 +7,55 @@
 }
 
 body {
-  font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background-color: #faf6ee;
+  background-image:
+    radial-gradient(1200px 600px at 110% -10%, rgba(224, 162, 88, 0.18), transparent 60%),
+    radial-gradient(1000px 500px at -10% 0%, rgba(196, 103, 58, 0.14), transparent 55%),
+    radial-gradient(900px 700px at 50% 120%, rgba(107, 143, 113, 0.12), transparent 60%);
+  background-attachment: fixed;
 }
 
 h1,
 h2,
 h3,
 .display {
-  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+  font-family: var(--font-display), Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.01em;
 }
 
 @keyframes loader {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(200%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
 }
 .animate-loader {
   animation: loader 1.4s ease-in-out infinite;
+}
+
+@keyframes floatUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-in {
+  animation: floatUp 0.35s ease-out both;
+}
+
+/* Scrollbar sutil para zonas con overflow */
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: #e2d6c2;
+  border-radius: 999px;
 }
