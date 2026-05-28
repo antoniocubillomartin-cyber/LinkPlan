@@ -9,6 +9,20 @@ export type User = {
   pace: 'relajado' | 'moderado' | 'intenso';
 };
 
+export type TrendTag = {
+  tag: string;
+  kind: 'food' | 'activity';
+  score: number;
+  users: number;
+  venues: number;
+};
+
+export type TrendingCategories = {
+  food: TrendTag[];
+  activity: TrendTag[];
+  top: TrendTag[];
+};
+
 export type Venue = {
   id: string;
   name: string;
@@ -56,6 +70,23 @@ export type StoredPlan = {
   afternoonVenue: Venue;
   reservation: Reservation | null;
   createdAt: string;
+};
+
+export type PlanSuggestion = {
+  slot: 'morning' | 'lunch' | 'afternoon';
+  currentVenueId: string;
+  currentVenueName: string;
+  currentScore: number;
+  alternativeVenueId: string;
+  alternativeVenueName: string;
+  alternativeScore: number;
+  scoreImprovement: string;
+  priceDelta: number;
+};
+
+export type PlanSuggestions = {
+  planId: string;
+  suggestions: PlanSuggestion[];
 };
 
 export type Reservation = {

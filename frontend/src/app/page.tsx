@@ -7,7 +7,7 @@ import { LoginScreen } from '@/components/LoginScreen';
 import { ProfilePanel } from '@/components/ProfilePanel';
 import { OnboardingGustos } from '@/components/OnboardingGustos';
 import { useAuth } from '@/lib/authContext';
-import type { Plan, StoredPlan, User, Venue } from '@/types';
+import type { Plan, PlanSuggestion, PlanSuggestions, StoredPlan, User, Venue } from '@/types';
 
 const FOOD_TAGS = [
   'tradicional', 'tapas', 'español', 'italiano', 'pizza', 'pasta', 'asiatico', 'japones', 'sushi',
@@ -69,6 +69,7 @@ export default function Home() {
 function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<void> }) {
   const [users, setUsers] = useState<User[]>([]);
   const [myPlans, setMyPlans] = useState<StoredPlan[]>([]);
+  const [suggestions, setSuggestions] = useState<Record<string, PlanSuggestion[]>>({});
   const [admin, setAdmin] = useState<{ restaurants: Venue[]; activities: Venue[]; stats: { plans: number; reservations: number } }>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,16 +98,18 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
     setLoading(true);
     setError(null);
     try {
-      const [usersData, adminData, mine, friendsData] = await Promise.all([
+      const [usersData, adminData, mine, friendsData, sugg] = await Promise.all([
         api.users(),
         api.adminData(),
         api.myPlans().catch(() => []),
-        api.friends().catch(() => [])
+        api.friends().catch(() => []),
+        api.planSuggestions().catch(() => [] as PlanSuggestions[])
       ]);
       setUsers(usersData);
       setAdmin(adminData);
       setMyPlans(mine);
       setFriends(friendsData);
+      setSuggestions(Object.fromEntries(sugg.map((s) => [s.planId, s.suggestions])));
       const refreshedMe = usersData.find((u) => u.id === authUser.id);
       if (refreshedMe) setMe(refreshedMe);
     } catch (err) {
@@ -195,6 +198,16 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
   async function changePlanDate(id: string, newDate: string) {
     await api.updatePlan(id, { date: newDate });
     await refresh();
+  }
+
+  async function applySuggestion(planId: string, s: PlanSuggestion) {
+    setError(null);
+    try {
+      await api.swapVenue(planId, s.slot, s.alternativeVenueId);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo aplicar la sugerencia');
+    }
   }
 
   async function saveProfile(patch: Partial<Pick<User, 'name' | 'description' | 'foodTags' | 'activityTags'>>) {
@@ -392,6 +405,7 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                 {myPlans.map((p) => {
                   const isExpanded = expandedPlanId === p.id;
                   const isOrganizer = p.organizerId === authUser.id;
+                  const planSuggestions = suggestions[p.id] ?? [];
                   const statusLabel = p.status === 'COMPLETED' ? '✅ Completado' : p.status === 'CANCELLED' ? '✖ Cancelado' : '🟢 Activo';
                   return (
                     <article key={p.id} className={`rounded-xl border p-4 text-sm transition ${isExpanded ? 'border-[#1A1714]' : 'border-[#EAE4D9]'} ${p.status === 'COMPLETED' ? 'opacity-70' : ''}`}>
@@ -406,6 +420,11 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                             {p.reservation ? (
                               <span className="rounded-full bg-[#6B8F71] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white">
                                 Reservado · {p.reservation.code}
+                              </span>
+                            ) : null}
+                            {planSuggestions.length > 0 ? (
+                              <span className="rounded-full bg-[#C4673A] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white">
+                                🔥 {planSuggestions.length} mejora{planSuggestions.length > 1 ? 's' : ''}
                               </span>
                             ) : null}
                           </div>
@@ -434,6 +453,41 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                             <span>Zona: <strong>{p.zone || 'libre'}</strong></span>
                             {p.reservation ? <span>Reserva: <strong>{p.reservation.code}</strong></span> : null}
                           </div>
+
+                          {planSuggestions.length > 0 ? (
+                            <div className="rounded-lg border border-[#EAD9B7] bg-[#FBF4E6] p-3">
+                              <p className="text-xs font-semibold text-[#9A5A2E]">🔥 Mejores opciones para tus gustos</p>
+                              <p className="mt-0.5 text-[11px] text-[#6B5D4F]">Sugerencias según los gustos de los participantes. Tú decides si las aplicas.</p>
+                              <div className="mt-2 space-y-2">
+                                {planSuggestions.map((s) => {
+                                  const slotLabel = s.slot === 'morning' ? '🌅 Mañana' : s.slot === 'lunch' ? '🍽️ Comida' : '☀️ Tarde';
+                                  return (
+                                    <div key={s.slot} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white p-2">
+                                      <div className="min-w-0 text-xs">
+                                        <p className="text-[10px] uppercase tracking-wider text-[#9A9390]">{slotLabel}</p>
+                                        <p className="truncate">
+                                          <span className="line-through text-[#9A9390]">{s.currentVenueName}</span>
+                                          {' → '}
+                                          <strong>{s.alternativeVenueName}</strong>
+                                        </p>
+                                        <p className="text-[10px] text-[#6B8F71]">
+                                          {s.scoreImprovement} de afinidad
+                                          {s.priceDelta !== 0 ? ` · ${s.priceDelta > 0 ? '+' : ''}${s.priceDelta}€/persona` : ' · mismo precio'}
+                                        </p>
+                                      </div>
+                                      <button
+                                        className="rounded-lg bg-[#C4673A] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                                        disabled={p.status !== 'ACTIVE'}
+                                        onClick={() => void applySuggestion(p.id, s)}
+                                      >
+                                        Aplicar
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
 
                           <div className="grid gap-2 sm:grid-cols-2">
                             <label className="text-xs">

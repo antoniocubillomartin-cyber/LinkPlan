@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const { z } = require('zod');
 const { PrismaClient, VenueType, ReservationStatus } = require('@prisma/client');
 const { generatePlan } = require('./services/planService');
+const { computePlanSuggestions } = require('./services/suggestionService');
 const { COLORS } = require('./data/seedData');
 const { createAuthRouter, requireAuth } = require('./auth');
 
@@ -152,6 +153,49 @@ app.delete('/api/friends/:userId', requireAuth, async (req, res, next) => {
   }
 });
 
+app.get('/api/trends/categories', async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 3, 1), 12);
+    const [users, venues] = await Promise.all([
+      prisma.user.findMany({ select: { foodTags: true, activityTags: true } }),
+      prisma.venue.findMany({ select: { tags: true, type: true } })
+    ]);
+
+    const rank = (kind) => {
+      const userField = kind === 'food' ? 'foodTags' : 'activityTags';
+      const venueType = kind === 'food' ? VenueType.RESTAURANT : VenueType.ACTIVITY;
+      const demand = {};
+      for (const u of users) for (const t of u[userField] || []) demand[t] = (demand[t] || 0) + 1;
+      const supply = {};
+      const kindVenues = venues.filter((v) => v.type === venueType);
+      for (const v of kindVenues) for (const t of v.tags || []) supply[t] = (supply[t] || 0) + 1;
+      const totalUsers = users.length || 1;
+      const totalVenues = kindVenues.length || 1;
+      const tags = new Set([...Object.keys(demand), ...Object.keys(supply)]);
+      return [...tags]
+        .map((tag) => {
+          const d = (demand[tag] || 0) / totalUsers;
+          const s = (supply[tag] || 0) / totalVenues;
+          return {
+            tag,
+            kind,
+            score: Math.round((0.7 * d + 0.3 * s) * 100),
+            users: demand[tag] || 0,
+            venues: supply[tag] || 0
+          };
+        })
+        .sort((a, b) => b.score - a.score || b.users - a.users);
+    };
+
+    const food = rank('food');
+    const activity = rank('activity');
+    const top = [...food, ...activity].sort((a, b) => b.score - a.score || b.users - a.users).slice(0, limit);
+    res.json({ food: food.slice(0, limit), activity: activity.slice(0, limit), top });
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.get('/api/venues', async (req, res, next) => {
   try {
     const type = req.query.type === 'ACTIVITY' ? VenueType.ACTIVITY : req.query.type === 'RESTAURANT' ? VenueType.RESTAURANT : undefined;
@@ -245,6 +289,76 @@ app.get('/api/plans/mine', requireAuth, async (req, res, next) => {
       include: planInclude
     });
     res.json(plans);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/plans/mine/suggestions', requireAuth, async (req, res, next) => {
+  try {
+    const [plans, venues] = await Promise.all([
+      prisma.plan.findMany({
+        where: { participants: { some: { userId: req.userId } }, status: 'ACTIVE' },
+        include: planInclude
+      }),
+      prisma.venue.findMany()
+    ]);
+    const result = plans
+      .map((plan) => ({ planId: plan.id, suggestions: computePlanSuggestions(plan, venues) }))
+      .filter((p) => p.suggestions.length > 0);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/plans/:id/swap-venue', requireAuth, async (req, res, next) => {
+  try {
+    const { slot, venueId } = z
+      .object({ slot: z.enum(['morning', 'lunch', 'afternoon']), venueId: z.string().min(1) })
+      .parse(req.body);
+
+    const plan = await prisma.plan.findUnique({ where: { id: req.params.id }, include: planInclude });
+    if (!plan) return res.status(404).json({ message: 'Plan not found' });
+    if (!plan.participants.some((p) => p.userId === req.userId)) {
+      return res.status(403).json({ message: 'Not a participant' });
+    }
+    if (plan.status !== 'ACTIVE') return res.status(400).json({ message: 'Solo se pueden modificar planes activos' });
+
+    const venue = await prisma.venue.findUnique({ where: { id: venueId } });
+    if (!venue || !venue.available) return res.status(404).json({ message: 'Venue not available' });
+
+    const expectedType = slot === 'lunch' ? VenueType.RESTAURANT : VenueType.ACTIVITY;
+    if (venue.type !== expectedType) return res.status(400).json({ message: 'El venue no corresponde a ese momento del plan' });
+
+    if (slot === 'morning' && venueId === plan.afternoonVenueId) return res.status(400).json({ message: 'Mañana y tarde no pueden ser el mismo sitio' });
+    if (slot === 'afternoon' && venueId === plan.morningVenueId) return res.status(400).json({ message: 'Mañana y tarde no pueden ser el mismo sitio' });
+
+    const slotField = slot === 'morning' ? 'morningVenueId' : slot === 'lunch' ? 'lunchVenueId' : 'afternoonVenueId';
+    const prices = {
+      morning: plan.morningVenue.price,
+      lunch: plan.lunchVenue.price,
+      afternoon: plan.afternoonVenue.price
+    };
+    prices[slot] = venue.price;
+    const perPerson = prices.morning + prices.lunch + prices.afternoon;
+    if (perPerson > plan.budgetPerPerson) {
+      return res.status(400).json({ message: 'El cambio supera el presupuesto por persona' });
+    }
+
+    const totalPeople = plan.participants.length;
+    const totalCost = perPerson * totalPeople;
+
+    const updated = await prisma.plan.update({
+      where: { id: plan.id },
+      data: {
+        [slotField]: venueId,
+        totalCost,
+        remainingBudget: plan.totalBudget - totalCost
+      },
+      include: planInclude
+    });
+    res.json(updated);
   } catch (err) {
     next(err);
   }

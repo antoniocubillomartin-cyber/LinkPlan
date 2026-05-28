@@ -1,4 +1,4 @@
-import type { Plan, Reservation, StoredPlan, User, Venue } from '@/types';
+import type { Plan, PlanSuggestions, Reservation, StoredPlan, TrendingCategories, User, Venue } from '@/types';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://link-plan-api.onrender.com';
 const TOKEN_KEY = 'lp_token';
@@ -67,12 +67,16 @@ export const api = {
     variantSeed?: number;
   }) => request<Plan>('/api/plans/generate', { method: 'POST', body: JSON.stringify(body) }),
   myPlans: () => request<StoredPlan[]>('/api/plans/mine'),
+  planSuggestions: () => request<PlanSuggestions[]>('/api/plans/mine/suggestions'),
+  swapVenue: (planId: string, slot: 'morning' | 'lunch' | 'afternoon', venueId: string) =>
+    request<StoredPlan>(`/api/plans/${planId}/swap-venue`, { method: 'POST', body: JSON.stringify({ slot, venueId }) }),
   updatePlan: (id: string, body: { date?: string; zone?: string | null; status?: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' }) =>
     request<StoredPlan>(`/api/plans/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   completePlan: (id: string) => request<StoredPlan>(`/api/plans/${id}/complete`, { method: 'POST' }),
   deletePlan: (id: string) => request<void>(`/api/plans/${id}`, { method: 'DELETE' }),
   confirmReservation: (planId: string) => request<{ id: string }>('/api/reservations', { method: 'POST', body: JSON.stringify({ planId }) }),
   adminData: () => request<{ restaurants: Venue[]; activities: Venue[]; stats: { plans: number; reservations: number } }>('/api/admin/data'),
+  trendingCategories: (limit = 3) => request<TrendingCategories>(`/api/trends/categories?limit=${limit}`),
   auth: {
     me: () => request<User>('/api/auth/me'),
     logout: async () => {
