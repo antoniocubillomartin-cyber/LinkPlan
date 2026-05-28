@@ -7,6 +7,7 @@ const { PrismaClient, VenueType, ReservationStatus } = require('@prisma/client')
 const { generatePlan, pickPace } = require('./services/planService');
 const { computePlanSuggestions } = require('./services/suggestionService');
 const { validateAllVenues } = require('./services/urlValidationService');
+const { getTrendingNews } = require('./services/newsService');
 const { COLORS } = require('./data/seedData');
 const { createAuthRouter, requireAuth } = require('./auth');
 
@@ -194,6 +195,16 @@ app.get('/api/trends/categories', async (req, res, next) => {
     res.json({ food: food.slice(0, limit), activity: activity.slice(0, limit), top });
   } catch (err) {
     next(err);
+  }
+});
+
+app.get('/api/trends/news', async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 15, 1), 30);
+    const news = await getTrendingNews({ limit });
+    res.json(news);
+  } catch (err) {
+    res.json({ updatedAt: null, total: 0, items: [], error: 'feed-unavailable' });
   }
 });
 

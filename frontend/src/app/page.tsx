@@ -8,7 +8,7 @@ import { ProfilePanel } from '@/components/ProfilePanel';
 import { OnboardingGustos } from '@/components/OnboardingGustos';
 import { useAuth } from '@/lib/authContext';
 import { buildTimeline, formatDuration } from '@/lib/timeline';
-import type { Plan, PlanSuggestion, PlanSuggestions, StoredPlan, User, Venue } from '@/types';
+import type { Plan, PlanSuggestion, PlanSuggestions, StoredPlan, TrendingEvent, User, Venue } from '@/types';
 
 const FOOD_TAGS = [
   'tradicional', 'tapas', 'español', 'italiano', 'pizza', 'pasta', 'asiatico', 'japones', 'sushi',
@@ -74,11 +74,15 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
   const [suggestions, setSuggestions] = useState<Record<string, PlanSuggestion[]>>({});
   const [validatingUrls, setValidatingUrls] = useState(false);
   const [urlSummary, setUrlSummary] = useState<{ total: number; valid: number; broken: number } | null>(null);
+  const [news, setNews] = useState<TrendingEvent[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsLoaded, setNewsLoaded] = useState(false);
+  const [newsError, setNewsError] = useState(false);
   const [admin, setAdmin] = useState<{ restaurants: Venue[]; activities: Venue[]; stats: { plans: number; reservations: number } }>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [active, setActive] = useState<'usuarios' | 'generar' | 'planes' | 'perfil' | 'datos'>('usuarios');
+  const [active, setActive] = useState<'usuarios' | 'generar' | 'planes' | 'perfil' | 'datos' | 'news'>('usuarios');
   const [friends, setFriends] = useState<User[]>([]);
   const [me, setMe] = useState<User>(authUser);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -126,6 +130,23 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (active !== 'news' || newsLoaded || newsLoading) return;
+    setNewsLoading(true);
+    setNewsError(false);
+    api
+      .trendingNews(15)
+      .then((data) => {
+        setNews(data.items ?? []);
+        if (data.error) setNewsError(true);
+      })
+      .catch(() => setNewsError(true))
+      .finally(() => {
+        setNewsLoading(false);
+        setNewsLoaded(true);
+      });
+  }, [active, newsLoaded, newsLoading]);
 
   function toggleTag(value: string, selected: string[], setter: (next: string[]) => void) {
     setter(selected.includes(value) ? selected.filter((t) => t !== value) : [...selected, value]);
@@ -297,6 +318,7 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                 ['usuarios', 'Gestión de Usuarios', '👥'],
                 ['generar', 'Generar Plan', '✨'],
                 ['planes', 'Mis Planes y Reservas', '🗓️'],
+                ['news', 'Trending News', '🔥'],
                 ['datos', 'Panel de Datos', '📊']
               ] as const).map(([key, label, icon]) => (
                 <button
@@ -700,6 +722,61 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                 onSave={(patch) => void saveProfile(patch)}
                 onToggleFriend={(uid) => void toggleFriend(uid)}
               />
+            ) : null}
+
+            {active === 'news' ? (
+              <div className="animate-in space-y-4">
+                <div>
+                  <h1 className="text-2xl font-semibold">🔥 Trending News</h1>
+                  <p className="mt-0.5 text-sm text-[#9A8F80]">Lo que se cuece en Madrid ahora mismo · agenda oficial (datos.madrid.es)</p>
+                </div>
+
+                {newsLoading ? (
+                  <div className="rounded-2xl border border-dashed border-[#E0D6C2] bg-[#FCFAF5] p-10 text-center">
+                    <p className="text-3xl animate-pulse">📡</p>
+                    <p className="mt-2 text-sm text-[#9A8F80]">Buscando los planazos del momento…</p>
+                  </div>
+                ) : news.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#E0D6C2] bg-[#FCFAF5] p-10 text-center">
+                    <p className="text-3xl">🛰️</p>
+                    <p className="mt-2 font-medium">No hay novedades ahora mismo</p>
+                    <p className="text-sm text-[#9A8F80]">
+                      {newsError ? 'No pudimos conectar con la agenda de Madrid. Inténtalo más tarde.' : 'Vuelve en un rato, la agenda se actualiza sola.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {news.map((ev, i) => (
+                      <a
+                        key={ev.id}
+                        href={ev.url ?? '#'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-3 rounded-2xl border border-[#EAE4D9] bg-white p-3 transition hover:-translate-y-0.5 hover:border-[#E0A258] hover:shadow-md hover:shadow-[#E0A258]/10"
+                      >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#C4673A] to-[#E0A258] text-xs font-bold text-white">
+                          {i + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{ev.title}</p>
+                          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[#9A8F80]">
+                            <span>{ev.category}</span>
+                            {ev.date ? <span>· {new Date(ev.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}{ev.time ? ` · ${ev.time}` : ''}</span> : null}
+                            {ev.venue ? <span className="truncate">· {ev.venue}</span> : null}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${ev.free ? 'bg-[#E8F1E9] text-[#3F6B4A]' : 'bg-[#F3EADB] text-[#8A7A5E]'}`}>
+                            {ev.free ? 'Gratis' : ev.price || '€'}
+                          </span>
+                          <span className="text-[10px] font-semibold text-[#C4673A]">⭐ {ev.score}</span>
+                        </div>
+                      </a>
+                    ))}
+                    <p className="pt-1 text-center text-[11px] text-[#B7AE9E]">Fuente: agenda abierta del Ayuntamiento de Madrid · se actualiza periódicamente</p>
+                  </div>
+                )}
+              </div>
             ) : null}
 
             {active === 'datos' ? (

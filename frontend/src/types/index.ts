@@ -23,6 +23,27 @@ export type TrendingCategories = {
   top: TrendTag[];
 };
 
+export type TrendingEvent = {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  date: string | null;
+  time: string | null;
+  free: boolean;
+  price: string | null;
+  venue: string | null;
+  url: string | null;
+  score: number;
+};
+
+export type TrendingNews = {
+  updatedAt: string | null;
+  total: number;
+  items: TrendingEvent[];
+  error?: string;
+};
+
 export type Venue = {
   id: string;
   name: string;
