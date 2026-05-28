@@ -114,4 +114,4 @@ function generatePlan({
   };
 }
 
-module.exports = { generatePlan, scorePlace };
+module.exports = { generatePlan, scorePlace, pickPace };

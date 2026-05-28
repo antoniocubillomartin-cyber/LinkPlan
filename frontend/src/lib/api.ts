@@ -66,6 +66,16 @@ export const api = {
     excludeIds?: string[];
     variantSeed?: number;
   }) => request<Plan>('/api/plans/generate', { method: 'POST', body: JSON.stringify(body) }),
+  confirmPlan: (body: {
+    companionIds: string[];
+    budgetPerPerson: number;
+    date: string;
+    zone?: string;
+    duration?: 'corto' | 'medio' | 'largo';
+    morningVenueId: string;
+    lunchVenueId: string;
+    afternoonVenueId: string;
+  }) => request<StoredPlan>('/api/plans', { method: 'POST', body: JSON.stringify(body) }),
   myPlans: () => request<StoredPlan[]>('/api/plans/mine'),
   planSuggestions: () => request<PlanSuggestions[]>('/api/plans/mine/suggestions'),
   swapVenue: (planId: string, slot: 'morning' | 'lunch' | 'afternoon', venueId: string) =>

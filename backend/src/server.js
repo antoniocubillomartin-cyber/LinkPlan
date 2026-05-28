@@ -4,7 +4,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { z } = require('zod');
 const { PrismaClient, VenueType, ReservationStatus } = require('@prisma/client');
-const { generatePlan } = require('./services/planService');
+const { generatePlan, pickPace } = require('./services/planService');
 const { computePlanSuggestions } = require('./services/suggestionService');
 const { COLORS } = require('./data/seedData');
 const { createAuthRouter, requireAuth } = require('./auth');
@@ -221,10 +221,28 @@ app.get('/api/admin/data', async (_req, res, next) => {
   }
 });
 
+async function getFriendIds(userId) {
+  const links = await prisma.friendship.findMany({
+    where: { OR: [{ requesterId: userId }, { receiverId: userId }] }
+  });
+  return new Set(links.map((l) => (l.requesterId === userId ? l.receiverId : l.requesterId)));
+}
+
+function assertCompanionsAreFriends(companionIds, organizerId, friendIds) {
+  const invalid = companionIds.filter((id) => id !== organizerId && !friendIds.has(id));
+  return invalid.length === 0;
+}
+
 app.post('/api/plans/generate', requireAuth, async (req, res, next) => {
   try {
     const input = planSchema.parse(req.body);
     const organizerId = req.userId;
+
+    const friendIds = await getFriendIds(organizerId);
+    if (!assertCompanionsAreFriends(input.companionIds, organizerId, friendIds)) {
+      return res.status(403).json({ message: 'Solo puedes crear planes con tus amigos' });
+    }
+
     const ids = Array.from(new Set([organizerId, ...input.companionIds]));
     const users = await prisma.user.findMany({ where: { id: { in: ids } } });
     const organizer = users.find((u) => u.id === organizerId);
@@ -244,29 +262,76 @@ app.post('/api/plans/generate', requireAuth, async (req, res, next) => {
       activities: venues.filter((v) => v.type === VenueType.ACTIVITY)
     });
 
-    const createdPlan = await prisma.plan.create({
+    // Preview only: no se persiste hasta que el usuario confirme (POST /api/plans).
+    res.json({ ...plan, preview: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const confirmPlanSchema = z.object({
+  companionIds: z.array(z.string()).default([]),
+  budgetPerPerson: z.number().min(10).max(500),
+  date: z.string().min(1),
+  zone: z.string().optional().default(''),
+  duration: z.enum(['corto', 'medio', 'largo']).optional().default('medio'),
+  morningVenueId: z.string().min(1),
+  lunchVenueId: z.string().min(1),
+  afternoonVenueId: z.string().min(1)
+});
+
+app.post('/api/plans', requireAuth, async (req, res, next) => {
+  try {
+    const input = confirmPlanSchema.parse(req.body);
+    const organizerId = req.userId;
+
+    const friendIds = await getFriendIds(organizerId);
+    if (!assertCompanionsAreFriends(input.companionIds, organizerId, friendIds)) {
+      return res.status(403).json({ message: 'Solo puedes crear planes con tus amigos' });
+    }
+
+    const ids = Array.from(new Set([organizerId, ...input.companionIds]));
+    const users = await prisma.user.findMany({ where: { id: { in: ids } } });
+    const totalPeople = users.length;
+
+    const [morning, lunch, afternoon] = await Promise.all([
+      prisma.venue.findUnique({ where: { id: input.morningVenueId } }),
+      prisma.venue.findUnique({ where: { id: input.lunchVenueId } }),
+      prisma.venue.findUnique({ where: { id: input.afternoonVenueId } })
+    ]);
+    if (!morning || !lunch || !afternoon) return res.status(400).json({ message: 'Venue inválido' });
+    if (morning.type !== VenueType.ACTIVITY || afternoon.type !== VenueType.ACTIVITY || lunch.type !== VenueType.RESTAURANT) {
+      return res.status(400).json({ message: 'Tipos de venue inválidos' });
+    }
+    if (morning.id === afternoon.id) return res.status(400).json({ message: 'Mañana y tarde no pueden ser el mismo sitio' });
+
+    const perPerson = morning.price + lunch.price + afternoon.price;
+    if (perPerson > input.budgetPerPerson) return res.status(400).json({ message: 'El plan supera el presupuesto por persona' });
+
+    const totalBudget = input.budgetPerPerson * totalPeople;
+    const totalCost = perPerson * totalPeople;
+    const pace = pickPace(users);
+
+    const created = await prisma.plan.create({
       data: {
-        date: new Date(plan.date),
-        zone: plan.zone || null,
-        pace: plan.pace,
-        duration: plan.duration,
-        budgetPerPerson: plan.budgetPerPerson,
-        totalBudget: plan.totalBudget,
-        totalCost: plan.totalCost,
-        remainingBudget: plan.remainingBudget,
-        organizerId: plan.organizer.id,
-        morningVenueId: plan.morning.id,
-        lunchVenueId: plan.lunch.id,
-        afternoonVenueId: plan.afternoon.id,
-        participants: {
-          createMany: {
-            data: plan.allUsers.map((u) => ({ userId: u.id }))
-          }
-        }
-      }
+        date: new Date(input.date),
+        zone: input.zone || null,
+        pace,
+        duration: input.duration,
+        budgetPerPerson: input.budgetPerPerson,
+        totalBudget,
+        totalCost,
+        remainingBudget: totalBudget - totalCost,
+        organizerId,
+        morningVenueId: morning.id,
+        lunchVenueId: lunch.id,
+        afternoonVenueId: afternoon.id,
+        participants: { createMany: { data: ids.map((id) => ({ userId: id })) } }
+      },
+      include: planInclude
     });
 
-    res.status(201).json({ ...plan, id: createdPlan.id });
+    res.status(201).json(created);
   } catch (err) {
     next(err);
   }

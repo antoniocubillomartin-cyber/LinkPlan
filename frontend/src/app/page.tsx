@@ -7,6 +7,7 @@ import { LoginScreen } from '@/components/LoginScreen';
 import { ProfilePanel } from '@/components/ProfilePanel';
 import { OnboardingGustos } from '@/components/OnboardingGustos';
 import { useAuth } from '@/lib/authContext';
+import { buildTimeline, formatDuration } from '@/lib/timeline';
 import type { Plan, PlanSuggestion, PlanSuggestions, StoredPlan, User, Venue } from '@/types';
 
 const FOOD_TAGS = [
@@ -92,7 +93,7 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
   const [budget, setBudget] = useState(50);
   const [zone, setZone] = useState('');
 
-  const companions = useMemo(() => users.filter((u) => u.id !== authUser.id), [users, authUser.id]);
+  const companions = useMemo(() => friends, [friends]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -170,7 +171,6 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
       });
       setPlan(nextPlan);
       setActive('generar');
-      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo generar el plan');
     } finally {
@@ -224,21 +224,39 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
     setFriends(next);
   }
 
-  async function confirmPlan() {
+  async function savePlan() {
     if (!plan) return;
     setSaving(true);
     setError(null);
     try {
-      await api.confirmReservation(plan.id);
-      const planId = plan.id;
+      const saved = await api.confirmPlan({
+        companionIds,
+        budgetPerPerson: budget,
+        date,
+        zone,
+        duration,
+        morningVenueId: plan.morning.id,
+        lunchVenueId: plan.lunch.id,
+        afternoonVenueId: plan.afternoon.id
+      });
       await refresh();
       setPlan(null);
-      setExpandedPlanId(planId);
+      setExpandedPlanId(saved.id);
       setActive('planes');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo confirmar la reserva');
+      setError(err instanceof Error ? err.message : 'No se pudo confirmar el plan');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function reservePlan(id: string) {
+    setError(null);
+    try {
+      await api.confirmReservation(id);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo reservar el plan');
     }
   }
 
@@ -355,18 +373,24 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                   </label>
                   <div>
                     <p className="mb-1 text-sm">Acompañantes</p>
-                    <div className="flex flex-wrap gap-2">
-                      {companions.map((u) => (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => toggleTag(u.id, companionIds, setCompanionIds)}
-                          className={`rounded-full border px-3 py-1 text-sm ${companionIds.includes(u.id) ? 'bg-[#1A1714] text-white' : ''}`}
-                        >
-                          {u.name}
-                        </button>
-                      ))}
-                    </div>
+                    {companions.length === 0 ? (
+                      <p className="rounded-lg bg-[#FAF7F2] p-3 text-xs text-[#9A9390]">
+                        Solo puedes invitar a tus amigos. Añade amigos en <strong>Mi Usuario</strong> para incluirlos aquí.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {companions.map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => toggleTag(u.id, companionIds, setCompanionIds)}
+                            className={`rounded-full border px-3 py-1 text-sm ${companionIds.includes(u.id) ? 'bg-[#1A1714] text-white' : ''}`}
+                          >
+                            {u.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <button disabled={saving} className="w-full rounded-lg bg-[#1A1714] px-4 py-2 text-sm font-medium text-white disabled:opacity-50" onClick={() => void createPlan()}>
                     {saving ? 'Generando...' : 'Generar Plan'}
@@ -377,19 +401,46 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                     <p className="text-sm text-[#9A9390]">Tu itinerario aparecerá aquí.</p>
                   ) : (
                     <div className="space-y-3 text-sm">
-                      <h3 className="display text-xl">Plan para {plan.allUsers.map((u) => u.name).join(' & ')}</h3>
-                      <p>Coste: {plan.totalCost.toFixed(0)}€ / Presupuesto: {plan.totalBudget.toFixed(0)}€</p>
-                      <a className="block hover:underline" href={plan.morning.url} target="_blank" rel="noreferrer">🌅 {plan.morning.name}</a>
-                      <a className="block hover:underline" href={plan.lunch.url} target="_blank" rel="noreferrer">🍽️ {plan.lunch.name}</a>
-                      <a className="block hover:underline" href={plan.afternoon.url} target="_blank" rel="noreferrer">☀️ {plan.afternoon.name}</a>
+                      <div className="flex items-center justify-between">
+                        <h3 className="display text-xl">Plan para {plan.allUsers.map((u) => u.name).join(' & ')}</h3>
+                        <span className="rounded-full bg-[#FBF4E6] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[#9A5A2E]">Borrador</span>
+                      </div>
+
+                      <div className="rounded-lg bg-[#FAF7F2] p-3 text-xs">
+                        <p>
+                          <strong>{plan.totalCost.toFixed(0)}€</strong> / {plan.totalPeople} {plan.totalPeople === 1 ? 'persona' : 'personas'} ={' '}
+                          <strong>{(plan.totalCost / plan.totalPeople).toFixed(0)}€</strong> por cabeza
+                        </p>
+                        <p className="text-[#9A9390]">Presupuesto: {plan.totalBudget.toFixed(0)}€ · Sobran {plan.remainingBudget.toFixed(0)}€</p>
+                      </div>
+
+                      {(() => {
+                        const { items, totalMin } = buildTimeline(plan);
+                        const venueBySlot = { morning: plan.morning, lunch: plan.lunch, afternoon: plan.afternoon };
+                        return (
+                          <div className="space-y-1">
+                            {items.map((it) => (
+                              <div key={it.slot} className="flex items-baseline gap-2">
+                                <span className="w-24 shrink-0 font-mono text-xs text-[#9A9390]">{it.start}–{it.end}</span>
+                                <a className="hover:underline" href={venueBySlot[it.slot].url} target="_blank" rel="noreferrer">
+                                  {it.label.split(' ')[0]} {venueBySlot[it.slot].name}
+                                </a>
+                              </div>
+                            ))}
+                            <p className="pt-1 text-xs text-[#9A9390]">Duración total: {formatDuration(totalMin)}</p>
+                          </div>
+                        );
+                      })()}
+
                       <div className="flex gap-2">
-                        <button className="flex-1 rounded-lg bg-[#C4673A] px-4 py-2 font-medium text-white" onClick={() => void confirmPlan()}>
-                          Confirmar Reserva
+                        <button disabled={saving} className="flex-1 rounded-lg bg-[#C4673A] px-4 py-2 font-medium text-white disabled:opacity-50" onClick={() => void savePlan()}>
+                          {saving ? 'Guardando…' : 'Confirmar plan'}
                         </button>
                         <button disabled={saving} className="rounded-lg border border-[#EAE4D9] px-4 py-2 text-sm hover:bg-[#FAF7F2] disabled:opacity-50" onClick={() => void regeneratePlan()}>
                           Otra opción
                         </button>
                       </div>
+                      <p className="text-center text-[11px] text-[#9A9390]">No se guarda hasta que confirmes.</p>
                     </div>
                   )}
                 </div>
@@ -448,11 +499,31 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                           </div>
 
                           <div className="flex flex-wrap items-center gap-3 text-xs text-[#6B5D4F]">
-                            <span>Coste total: <strong>{p.totalCost.toFixed(0)}€</strong> de {p.totalBudget.toFixed(0)}€</span>
-                            <span>Duración: <strong>{p.duration}</strong></span>
+                            <span>
+                              Coste: <strong>{p.totalCost.toFixed(0)}€</strong> / {p.participants.length} {p.participants.length === 1 ? 'persona' : 'personas'} ={' '}
+                              <strong>{(p.totalCost / p.participants.length).toFixed(0)}€</strong> pp
+                            </span>
+                            <span>Presupuesto: <strong>{p.totalBudget.toFixed(0)}€</strong></span>
                             <span>Zona: <strong>{p.zone || 'libre'}</strong></span>
                             {p.reservation ? <span>Reserva: <strong>{p.reservation.code}</strong></span> : null}
                           </div>
+
+                          {(() => {
+                            const { items, totalMin } = buildTimeline({ pace: p.pace, morning: p.morningVenue, lunch: p.lunchVenue, afternoon: p.afternoonVenue });
+                            return (
+                              <div className="rounded-lg border border-[#EAE4D9] p-3">
+                                <p className="mb-2 text-xs font-medium text-[#6B5D4F]">Horario sugerido · {formatDuration(totalMin)}</p>
+                                <div className="space-y-1 text-xs">
+                                  {items.map((it) => (
+                                    <div key={it.slot} className="flex items-baseline gap-2">
+                                      <span className="w-24 shrink-0 font-mono text-[#9A9390]">{it.start}–{it.end}</span>
+                                      <span>{it.label} · {it.venueName}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {planSuggestions.length > 0 ? (
                             <div className="rounded-lg border border-[#EAD9B7] bg-[#FBF4E6] p-3">
@@ -503,6 +574,11 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                               />
                             </label>
                             <div className="flex flex-col justify-end gap-2">
+                              {p.status === 'ACTIVE' && !p.reservation ? (
+                                <button className="rounded-lg bg-[#C4673A] px-3 py-2 text-xs font-medium text-white" onClick={() => void reservePlan(p.id)}>
+                                  Reservar
+                                </button>
+                              ) : null}
                               {p.status === 'ACTIVE' ? (
                                 <button className="rounded-lg bg-[#6B8F71] px-3 py-2 text-xs font-medium text-white" onClick={() => void completePlan(p.id)}>
                                   Marcar como completado
@@ -537,6 +613,32 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
               <div className="space-y-4">
                 <h1 className="text-2xl font-semibold">Panel de Datos</h1>
                 <p className="text-sm text-[#9A9390]">Planes: {admin?.stats.plans ?? 0} · Reservas: {admin?.stats.reservations ?? 0}</p>
+                {(() => {
+                  const allVenues = [...(admin?.restaurants ?? []), ...(admin?.activities ?? [])];
+                  const checked = allVenues.filter((v) => v.lastVerified);
+                  const broken = allVenues.filter((v) => v.urlValid === false);
+                  return (
+                    <div className="rounded-xl border border-[#EAE4D9] p-3 text-sm">
+                      <p className="font-medium">Estado de enlaces</p>
+                      {checked.length === 0 ? (
+                        <p className="mt-1 text-xs text-[#9A9390]">Sin verificar todavía. Ejecuta <code>npm run validate:urls</code> en el backend.</p>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-xs text-[#9A9390]">
+                            Verificados {checked.length}/{allVenues.length} · {broken.length} caído{broken.length === 1 ? '' : 's'}
+                          </p>
+                          {broken.length > 0 ? (
+                            <ul className="mt-2 space-y-1 text-xs text-red-600">
+                              {broken.map((v) => (
+                                <li key={v.id}>⚠️ {v.name} — {v.lastStatusCode ?? 'sin respuesta'} · <a className="underline" href={v.url} target="_blank" rel="noreferrer">{v.url}</a></li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
                 <details className="rounded-xl border border-[#EAE4D9] p-3">
                   <summary className="cursor-pointer font-medium">Restaurantes ({admin?.restaurants.length ?? 0})</summary>
                   <pre className="mt-2 overflow-auto text-xs">{JSON.stringify(admin?.restaurants ?? [], null, 2)}</pre>

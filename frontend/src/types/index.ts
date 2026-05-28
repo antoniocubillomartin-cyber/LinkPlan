@@ -33,10 +33,14 @@ export type Venue = {
   url: string;
   available: boolean;
   type: 'RESTAURANT' | 'ACTIVITY';
+  urlValid?: boolean | null;
+  lastStatusCode?: number | null;
+  lastVerified?: string | null;
 };
 
 export type Plan = {
-  id: string;
+  id?: string;
+  preview?: boolean;
   date: string;
   pace: string;
   zone: string;

@@ -86,6 +86,9 @@ model Venue {
   url            String
   available      Boolean   @default(true)
   type           VenueType
+  urlValid       Boolean?
+  lastStatusCode Int?
+  lastVerified   DateTime?
   morningPlans   Plan[]    @relation("MorningVenue")
   lunchPlans     Plan[]    @relation("LunchVenue")
   afternoonPlans Plan[]    @relation("AfternoonVenue")
