@@ -13,20 +13,42 @@ const activities = [
   { id: 'a2', tags: ['naturaleza'], zone: 'Retiro', price: 0, available: true }
 ];
 
-test('generatePlan returns itinerary and budget totals', () => {
-  const plan = generatePlan({
+function build(duration) {
+  return generatePlan({
     organizer,
     companions,
     budgetPerPerson: 50,
     date: '2026-05-27',
     zone: 'Centro',
     restaurants,
-    activities
+    activities,
+    duration
   });
+}
 
+test('corto genera solo la comida (1 plan)', () => {
+  const plan = build('corto');
   assert.equal(plan.totalPeople, 2);
   assert.equal(plan.totalBudget, 100);
+  assert.ok(plan.lunch);
+  assert.equal(plan.morning, null);
+  assert.equal(plan.afternoon, null);
+  assert.equal(plan.totalCost, plan.lunch.price * 2);
+});
+
+test('medio genera actividad + comida (2 planes)', () => {
+  const plan = build('medio');
+  assert.ok(plan.morning);
+  assert.ok(plan.lunch);
+  assert.equal(plan.afternoon, null);
+  assert.equal(plan.totalCost, (plan.morning.price + plan.lunch.price) * 2);
+});
+
+test('largo genera actividad + comida + actividad (3 planes)', () => {
+  const plan = build('largo');
   assert.ok(plan.morning);
   assert.ok(plan.lunch);
   assert.ok(plan.afternoon);
+  assert.notEqual(plan.morning.id, plan.afternoon.id);
+  assert.equal(plan.totalCost, (plan.morning.price + plan.lunch.price + plan.afternoon.price) * 2);
 });

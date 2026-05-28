@@ -72,9 +72,9 @@ export type Plan = {
   totalCost: number;
   remainingBudget: number;
   allUsers: User[];
-  morning: Venue;
+  morning: Venue | null;
   lunch: Venue;
-  afternoon: Venue;
+  afternoon: Venue | null;
 };
 
 export type StoredPlan = {
@@ -91,9 +91,9 @@ export type StoredPlan = {
   organizer: User;
   organizerId: string;
   participants: { user: User }[];
-  morningVenue: Venue;
+  morningVenue: Venue | null;
   lunchVenue: Venue;
-  afternoonVenue: Venue;
+  afternoonVenue: Venue | null;
   reservation: Reservation | null;
   createdAt: string;
 };
@@ -124,8 +124,8 @@ export type Reservation = {
     totalBudget: number;
     date: string;
     participants: { user: User }[];
-    morningVenue: Venue;
+    morningVenue: Venue | null;
     lunchVenue: Venue;
-    afternoonVenue: Venue;
+    afternoonVenue: Venue | null;
   };
 };

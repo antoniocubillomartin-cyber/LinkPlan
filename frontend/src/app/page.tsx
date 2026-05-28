@@ -11,9 +11,9 @@ import { buildTimeline, formatDuration } from '@/lib/timeline';
 import type { Plan, PlanSuggestion, PlanSuggestions, StoredPlan, TrendingEvent, User, Venue } from '@/types';
 
 const DURATIONS = [
-  { value: 'corto', label: 'Corto (2-3h)' },
-  { value: 'medio', label: 'Medio (medio día)' },
-  { value: 'largo', label: 'Largo (día entero)' }
+  { value: 'corto', label: 'Corto · 1 plan (~1-2h)' },
+  { value: 'medio', label: 'Medio · 2 planes (~2-4h)' },
+  { value: 'largo', label: 'Largo · 3 planes (~4-6h)' }
 ] as const;
 const ZONES = ['', 'Centro', 'Retiro', 'Malasaña', 'Chamberí', 'La Latina'];
 
@@ -177,7 +177,8 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
 
   async function regeneratePlan() {
     if (!plan) return;
-    await createPlan({ excludeIds: [plan.morning.id, plan.lunch.id, plan.afternoon.id] });
+    const excludeIds = [plan.morning?.id, plan.lunch.id, plan.afternoon?.id].filter((id): id is string => Boolean(id));
+    await createPlan({ excludeIds });
   }
 
   async function deletePlan(id: string) {
@@ -232,9 +233,9 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
         date,
         zone,
         duration,
-        morningVenueId: plan.morning.id,
+        morningVenueId: plan.morning?.id ?? null,
         lunchVenueId: plan.lunch.id,
-        afternoonVenueId: plan.afternoon.id
+        afternoonVenueId: plan.afternoon?.id ?? null
       });
       await refresh();
       setPlan(null);
@@ -452,17 +453,25 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
 
                       {(() => {
                         const { items, totalMin } = buildTimeline(plan);
-                        const venueBySlot = { morning: plan.morning, lunch: plan.lunch, afternoon: plan.afternoon };
+                        const venueBySlot: Record<'morning' | 'lunch' | 'afternoon', Venue | null> = {
+                          morning: plan.morning,
+                          lunch: plan.lunch,
+                          afternoon: plan.afternoon
+                        };
                         return (
                           <div className="space-y-1">
-                            {items.map((it) => (
-                              <div key={it.slot} className="flex items-baseline gap-2">
-                                <span className="w-24 shrink-0 font-mono text-xs text-[#5B6B82]">{it.start}–{it.end}</span>
-                                <a className="hover:underline" href={venueBySlot[it.slot].url} target="_blank" rel="noreferrer">
-                                  {it.label.split(' ')[0]} {venueBySlot[it.slot].name}
-                                </a>
-                              </div>
-                            ))}
+                            {items.map((it) => {
+                              const venue = venueBySlot[it.slot];
+                              if (!venue) return null;
+                              return (
+                                <div key={it.slot} className="flex items-baseline gap-2">
+                                  <span className="w-24 shrink-0 font-mono text-xs text-[#5B6B82]">{it.start}–{it.end}</span>
+                                  <a className="hover:underline" href={venue.url} target="_blank" rel="noreferrer">
+                                    {it.label.split(' ')[0]} {venue.name}
+                                  </a>
+                                </div>
+                              );
+                            })}
                             <p className="pt-1 text-xs text-[#5B6B82]">Duración total: {formatDuration(totalMin)}</p>
                           </div>
                         );
@@ -529,7 +538,13 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                             ) : null}
                           </div>
                           <p className="truncate text-xs text-[#5B6B82]">{statusLabel} · {p.participants.map((pp) => pp.user.name).join(', ')}</p>
-                          <p className="mt-1 truncate text-xs text-[#43577A]">🌅 {p.morningVenue.name} · 🍽️ {p.lunchVenue.name} · ☀️ {p.afternoonVenue.name}</p>
+                          <p className="mt-1 truncate text-xs text-[#43577A]">
+                            {[
+                              p.morningVenue ? `🌅 ${p.morningVenue.name}` : null,
+                              `🍽️ ${p.lunchVenue.name}`,
+                              p.afternoonVenue ? `☀️ ${p.afternoonVenue.name}` : null
+                            ].filter(Boolean).join(' · ')}
+                          </p>
                         </div>
                         <span className="text-xs text-[#5B6B82]">{isExpanded ? '▲' : '▼'}</span>
                       </button>
@@ -537,14 +552,16 @@ function App({ authUser, onLogout }: { authUser: User; onLogout: () => Promise<v
                       {isExpanded ? (
                         <div className="mt-4 space-y-4 border-t border-[#D8E3F2] pt-4">
                           <div className="grid gap-3 sm:grid-cols-3">
-                            {([['🌅', 'Mañana', p.morningVenue], ['🍽️', 'Comida', p.lunchVenue], ['☀️', 'Tarde', p.afternoonVenue]] as const).map(([emoji, label, venue]) => (
-                              <div key={label} className="rounded-lg bg-[#EAF1FB] p-3">
-                                <p className="text-xs uppercase tracking-wider text-[#5B6B82]">{emoji} {label}</p>
-                                <a className="mt-1 block font-medium hover:underline" href={venue.url} target="_blank" rel="noreferrer">{venue.name} ↗</a>
-                                <p className="mt-1 text-xs text-[#5B6B82]">{venue.zone} · {venue.price === 0 ? 'Gratis' : `${venue.price}€`}</p>
-                                <p className="text-xs text-[#5B6B82]">{venue.schedule}</p>
-                              </div>
-                            ))}
+                            {([['🌅', 'Mañana', p.morningVenue], ['🍽️', 'Comida', p.lunchVenue], ['☀️', 'Tarde', p.afternoonVenue]] as const).map(([emoji, label, venue]) =>
+                              venue ? (
+                                <div key={label} className="rounded-lg bg-[#EAF1FB] p-3">
+                                  <p className="text-xs uppercase tracking-wider text-[#5B6B82]">{emoji} {label}</p>
+                                  <a className="mt-1 block font-medium hover:underline" href={venue.url} target="_blank" rel="noreferrer">{venue.name} ↗</a>
+                                  <p className="mt-1 text-xs text-[#5B6B82]">{venue.zone} · {venue.price === 0 ? 'Gratis' : `${venue.price}€`}</p>
+                                  <p className="text-xs text-[#5B6B82]">{venue.schedule}</p>
+                                </div>
+                              ) : null
+                            )}
                           </div>
 
                           <div className="flex flex-wrap items-center gap-3 text-xs text-[#43577A]">

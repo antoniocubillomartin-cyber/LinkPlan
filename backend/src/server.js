@@ -333,9 +333,9 @@ const confirmPlanSchema = z.object({
   date: z.string().min(1),
   zone: z.string().optional().default(''),
   duration: z.enum(['corto', 'medio', 'largo']).optional().default('medio'),
-  morningVenueId: z.string().min(1),
+  morningVenueId: z.string().min(1).optional().nullable(),
   lunchVenueId: z.string().min(1),
-  afternoonVenueId: z.string().min(1)
+  afternoonVenueId: z.string().min(1).optional().nullable()
 });
 
 app.post('/api/plans', requireAuth, async (req, res, next) => {
@@ -353,17 +353,20 @@ app.post('/api/plans', requireAuth, async (req, res, next) => {
     const totalPeople = users.length;
 
     const [morning, lunch, afternoon] = await Promise.all([
-      prisma.venue.findUnique({ where: { id: input.morningVenueId } }),
+      input.morningVenueId ? prisma.venue.findUnique({ where: { id: input.morningVenueId } }) : null,
       prisma.venue.findUnique({ where: { id: input.lunchVenueId } }),
-      prisma.venue.findUnique({ where: { id: input.afternoonVenueId } })
+      input.afternoonVenueId ? prisma.venue.findUnique({ where: { id: input.afternoonVenueId } }) : null
     ]);
-    if (!morning || !lunch || !afternoon) return res.status(400).json({ message: 'Venue inválido' });
-    if (morning.type !== VenueType.ACTIVITY || afternoon.type !== VenueType.ACTIVITY || lunch.type !== VenueType.RESTAURANT) {
+    if (!lunch || (input.morningVenueId && !morning) || (input.afternoonVenueId && !afternoon)) {
+      return res.status(400).json({ message: 'Venue inválido' });
+    }
+    if (lunch.type !== VenueType.RESTAURANT) return res.status(400).json({ message: 'Tipos de venue inválidos' });
+    if ((morning && morning.type !== VenueType.ACTIVITY) || (afternoon && afternoon.type !== VenueType.ACTIVITY)) {
       return res.status(400).json({ message: 'Tipos de venue inválidos' });
     }
-    if (morning.id === afternoon.id) return res.status(400).json({ message: 'Mañana y tarde no pueden ser el mismo sitio' });
+    if (morning && afternoon && morning.id === afternoon.id) return res.status(400).json({ message: 'Mañana y tarde no pueden ser el mismo sitio' });
 
-    const perPerson = morning.price + lunch.price + afternoon.price;
+    const perPerson = (morning?.price ?? 0) + lunch.price + (afternoon?.price ?? 0);
     if (perPerson > input.budgetPerPerson) return res.status(400).json({ message: 'El plan supera el presupuesto por persona' });
 
     const totalBudget = input.budgetPerPerson * totalPeople;
@@ -381,9 +384,9 @@ app.post('/api/plans', requireAuth, async (req, res, next) => {
         totalCost,
         remainingBudget: totalBudget - totalCost,
         organizerId,
-        morningVenueId: morning.id,
+        morningVenueId: morning?.id ?? null,
         lunchVenueId: lunch.id,
-        afternoonVenueId: afternoon.id,
+        afternoonVenueId: afternoon?.id ?? null,
         participants: { createMany: { data: ids.map((id) => ({ userId: id })) } }
       },
       include: planInclude
@@ -448,6 +451,9 @@ app.post('/api/plans/:id/swap-venue', requireAuth, async (req, res, next) => {
     }
     if (plan.status !== 'ACTIVE') return res.status(400).json({ message: 'Solo se pueden modificar planes activos' });
 
+    if (slot === 'morning' && !plan.morningVenueId) return res.status(400).json({ message: 'Este plan no tiene actividad de mañana' });
+    if (slot === 'afternoon' && !plan.afternoonVenueId) return res.status(400).json({ message: 'Este plan no tiene actividad de tarde' });
+
     const venue = await prisma.venue.findUnique({ where: { id: venueId } });
     if (!venue || !venue.available) return res.status(404).json({ message: 'Venue not available' });
 
@@ -459,9 +465,9 @@ app.post('/api/plans/:id/swap-venue', requireAuth, async (req, res, next) => {
 
     const slotField = slot === 'morning' ? 'morningVenueId' : slot === 'lunch' ? 'lunchVenueId' : 'afternoonVenueId';
     const prices = {
-      morning: plan.morningVenue.price,
+      morning: plan.morningVenue?.price ?? 0,
       lunch: plan.lunchVenue.price,
-      afternoon: plan.afternoonVenue.price
+      afternoon: plan.afternoonVenue?.price ?? 0
     };
     prices[slot] = venue.price;
     const perPerson = prices.morning + prices.lunch + prices.afternoon;

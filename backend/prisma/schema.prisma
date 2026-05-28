@@ -122,12 +122,12 @@ model Plan {
   createdAt        DateTime          @default(now())
   organizerId      String
   organizer        User              @relation("OrganizerPlans", fields: [organizerId], references: [id], onDelete: Restrict)
-  morningVenueId   String
-  morningVenue     Venue             @relation("MorningVenue", fields: [morningVenueId], references: [id], onDelete: Restrict)
+  morningVenueId   String?
+  morningVenue     Venue?            @relation("MorningVenue", fields: [morningVenueId], references: [id], onDelete: Restrict)
   lunchVenueId     String
   lunchVenue       Venue             @relation("LunchVenue", fields: [lunchVenueId], references: [id], onDelete: Restrict)
-  afternoonVenueId String
-  afternoonVenue   Venue             @relation("AfternoonVenue", fields: [afternoonVenueId], references: [id], onDelete: Restrict)
+  afternoonVenueId String?
+  afternoonVenue   Venue?            @relation("AfternoonVenue", fields: [afternoonVenueId], references: [id], onDelete: Restrict)
   participants     PlanParticipant[]
   reservation      Reservation?
 }

@@ -1,9 +1,11 @@
 type Pace = 'relajado' | 'moderado' | 'intenso';
 
+// Cada plan dura ~1-2h. Con los factores de ritmo (0.8–1.25) la base de 90 min
+// se mantiene siempre dentro de ese rango (intenso ≈ 1h10, relajado ≈ 1h55).
 const SLOT_BASE_MIN: Record<'morning' | 'lunch' | 'afternoon', number> = {
-  morning: 120,
+  morning: 90,
   lunch: 90,
-  afternoon: 120
+  afternoon: 90
 };
 const PACE_FACTOR: Record<Pace, number> = { relajado: 1.25, moderado: 1, intenso: 0.8 };
 const PACE_START: Record<Pace, number> = { relajado: 630, moderado: 600, intenso: 570 }; // minutos desde 00:00 (10:30 / 10:00 / 09:30)
@@ -36,9 +38,9 @@ function roundTo5(n: number): number {
 
 export function buildTimeline(plan: {
   pace?: string;
-  morning: { name: string };
+  morning?: { name: string } | null;
   lunch: { name: string };
-  afternoon: { name: string };
+  afternoon?: { name: string } | null;
 }): { items: TimelineItem[]; totalMin: number } {
   const pace: Pace = (['relajado', 'moderado', 'intenso'] as const).includes(plan.pace as Pace)
     ? (plan.pace as Pace)
@@ -47,9 +49,9 @@ export function buildTimeline(plan: {
   const gap = PACE_GAP[pace];
 
   const slots: Array<{ slot: 'morning' | 'lunch' | 'afternoon'; venueName: string }> = [
-    { slot: 'morning', venueName: plan.morning.name },
-    { slot: 'lunch', venueName: plan.lunch.name },
-    { slot: 'afternoon', venueName: plan.afternoon.name }
+    ...(plan.morning ? [{ slot: 'morning' as const, venueName: plan.morning.name }] : []),
+    { slot: 'lunch' as const, venueName: plan.lunch.name },
+    ...(plan.afternoon ? [{ slot: 'afternoon' as const, venueName: plan.afternoon.name }] : [])
   ];
 
   let cursor = PACE_START[pace];

@@ -12,15 +12,17 @@ function pickPace(users) {
   return Object.entries(paceCounts).sort((a, b) => b[1] - a[1])[0][0] ?? 'moderado';
 }
 
-function durationFilter(activities, duration) {
-  // 'corto' favours short/free things, 'largo' favours immersive/cultural ones
-  if (duration === 'corto') return activities.filter((a) => !a.tags.includes('exposiciones') && !a.tags.includes('conciertos'));
-  if (duration === 'largo') return activities;
-  return activities;
+// Cada "plan" dura ~1-2h. La duración decide cuántos planes (sitios) entran:
+// corto = 1 (comida) · medio = 2 (actividad + comida) · largo = 3 (actividad + comida + actividad).
+function slotsForDuration(duration) {
+  if (duration === 'corto') return { morning: false, afternoon: false };
+  if (duration === 'largo') return { morning: true, afternoon: true };
+  return { morning: true, afternoon: false };
 }
 
-function hashCombo(a, b, c) {
-  return `${a.id}|${b.id}|${c.id}`;
+function variantBonus(seed, ...parts) {
+  if (!seed) return 0;
+  return (parts.join('|').length * seed) % 5;
 }
 
 function generatePlan({
@@ -57,8 +59,6 @@ function generatePlan({
     .map((a) => ({ ...a, score: scorePlace(a, mergedActivities, zone) }))
     .sort((a, b) => b.score - a.score || a.price - b.price);
 
-  rankedActivities = durationFilter(rankedActivities, duration);
-
   if (pace === 'intenso') rankedActivities = rankedActivities.filter((a) => !a.tags.includes('relax'));
   if (pace === 'relajado') {
     rankedActivities = [...rankedActivities].sort(
@@ -66,21 +66,35 @@ function generatePlan({
     );
   }
 
-  const candidateMornings = rankedActivities.filter((a) => !excludeSet.has(a.id)).slice(0, 12);
+  const { morning: wantsMorning, afternoon: wantsAfternoon } = slotsForDuration(duration);
   const candidateLunches = rankedRestaurants.filter((r) => !excludeSet.has(r.id)).slice(0, 12);
-  const candidateAfternoons = rankedActivities.filter((a) => !excludeSet.has(a.id)).slice(0, 12);
+  const candidateActivities = rankedActivities.filter((a) => !excludeSet.has(a.id)).slice(0, 12);
 
   let best = null;
-  for (const m of candidateMornings) {
-    for (const l of candidateLunches) {
-      for (const a of candidateAfternoons) {
+  const consider = (morning, lunch, afternoon) => {
+    const perPerson = (morning?.price ?? 0) + lunch.price + (afternoon?.price ?? 0);
+    if (perPerson > budgetPerPerson) return;
+    const score =
+      (morning?.score ?? 0) + lunch.score + (afternoon?.score ?? 0) +
+      variantBonus(variantSeed, morning?.id ?? '', lunch.id, afternoon?.id ?? '');
+    if (!best || score > best.score || (score === best.score && perPerson < best.perPerson)) {
+      best = { morning: morning ?? null, lunch, afternoon: afternoon ?? null, score, perPerson };
+    }
+  };
+
+  for (const l of candidateLunches) {
+    if (!wantsMorning) {
+      consider(null, l, null);
+      continue;
+    }
+    for (const m of candidateActivities) {
+      if (!wantsAfternoon) {
+        consider(m, l, null);
+        continue;
+      }
+      for (const a of candidateActivities) {
         if (a.id === m.id) continue;
-        const perPerson = m.price + l.price + a.price;
-        if (perPerson > budgetPerPerson) continue;
-        const score = m.score + l.score + a.score + (variantSeed ? (hashCombo(m, l, a).length * variantSeed) % 5 : 0);
-        if (!best || score > best.score || (score === best.score && perPerson < best.perPerson)) {
-          best = { morning: m, lunch: l, afternoon: a, score, perPerson };
-        }
+        consider(m, l, a);
       }
     }
   }

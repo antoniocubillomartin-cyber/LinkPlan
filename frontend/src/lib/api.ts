@@ -75,9 +75,9 @@ export const api = {
     date: string;
     zone?: string;
     duration?: 'corto' | 'medio' | 'largo';
-    morningVenueId: string;
+    morningVenueId?: string | null;
     lunchVenueId: string;
-    afternoonVenueId: string;
+    afternoonVenueId?: string | null;
   }) => request<StoredPlan>('/api/plans', { method: 'POST', body: JSON.stringify(body) }),
   myPlans: () => request<StoredPlan[]>('/api/plans/mine'),
   planSuggestions: () => request<PlanSuggestions[]>('/api/plans/mine/suggestions'),

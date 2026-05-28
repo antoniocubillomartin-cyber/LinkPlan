@@ -38,34 +38,37 @@ function computePlanSuggestions(plan, venues) {
 
   const restaurants = venues.filter((v) => v.type === 'RESTAURANT');
   const activities = venues.filter((v) => v.type === 'ACTIVITY');
-  const perPerson = plan.morningVenue.price + plan.lunchVenue.price + plan.afternoonVenue.price;
+  const perPerson = (plan.morningVenue?.price ?? 0) + plan.lunchVenue.price + (plan.afternoonVenue?.price ?? 0);
 
-  const slots = [
-    {
+  const slots = [];
+  if (plan.morningVenue) {
+    slots.push({
       slot: 'morning',
       current: plan.morningVenue,
       candidates: activities,
       mergedTags: mergedActivities,
       maxPrice: plan.budgetPerPerson - (perPerson - plan.morningVenue.price),
-      excludeIds: [plan.afternoonVenueId]
-    },
-    {
-      slot: 'lunch',
-      current: plan.lunchVenue,
-      candidates: restaurants,
-      mergedTags: mergedFood,
-      maxPrice: plan.budgetPerPerson - (perPerson - plan.lunchVenue.price),
-      excludeIds: []
-    },
-    {
+      excludeIds: plan.afternoonVenueId ? [plan.afternoonVenueId] : []
+    });
+  }
+  slots.push({
+    slot: 'lunch',
+    current: plan.lunchVenue,
+    candidates: restaurants,
+    mergedTags: mergedFood,
+    maxPrice: plan.budgetPerPerson - (perPerson - plan.lunchVenue.price),
+    excludeIds: []
+  });
+  if (plan.afternoonVenue) {
+    slots.push({
       slot: 'afternoon',
       current: plan.afternoonVenue,
       candidates: activities,
       mergedTags: mergedActivities,
       maxPrice: plan.budgetPerPerson - (perPerson - plan.afternoonVenue.price),
-      excludeIds: [plan.morningVenueId]
-    }
-  ];
+      excludeIds: plan.morningVenueId ? [plan.morningVenueId] : []
+    });
+  }
 
   const suggestions = [];
   for (const s of slots) {
