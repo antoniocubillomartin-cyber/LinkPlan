@@ -3,7 +3,9 @@ const { XMLParser } = require('fast-xml-parser');
 const SOURCES = {
   esmadrid: 'https://www.esmadrid.com/opendata/agenda_v1_es.xml',
   madridsecreto: 'https://madridsecreto.co/feed/',
-  entradas: 'https://www.entradas.com/city/madrid-370/conciertos-y-festivales-85/'
+  entradas: 'https://www.entradas.com/city/madrid-370/conciertos-y-festivales-85/',
+  // Agenda municipal oficial (datos abiertos del Ayuntamiento). Los enlaces apuntan a madrid.es.
+  madriddatos: 'https://datos.madrid.es/egob/catalogo/206974-0-agenda-eventos-culturales-100.json'
 };
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
@@ -16,7 +18,8 @@ const ALLOWED_HOSTS = [
   'thefork.es',
   'guiarepsol.com',
   'esmadrid.com',
-  'entradas.com'
+  'entradas.com',
+  'madrid.es'
 ];
 
 function hostAllowed(rawUrl) {
@@ -230,8 +233,54 @@ function normalizeEntradas(html) {
   return events;
 }
 
+// "2026-06-07 19:00:00.0" -> Date | null
+function parseMadridDatosDate(value) {
+  if (!value || typeof value !== 'string') return null;
+  const d = new Date(value.trim().replace(' ', 'T').replace(/\.\d+$/, ''));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function categoryFromType(typeUri) {
+  const segment = String(typeUri || '').split('/').pop() || '';
+  const pretty = segment.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+  return pretty ? `🎭 ${pretty}` : '🎭 Evento';
+}
+
+// Agenda municipal (datos.madrid.es): JSON oficial con @graph de eventos.
+function normalizeMadridDatos(jsonText) {
+  let doc;
+  try {
+    doc = JSON.parse(jsonText);
+  } catch {
+    return [];
+  }
+  return asArray(doc['@graph']).map((e) => {
+    const start = parseMadridDatosDate(e.dtstart);
+    const end = parseMadridDatosDate(e.dtend);
+    const free = e.free === 1 || e.free === '1' || e.free === true;
+    const priceText = typeof e.price === 'string' ? e.price.trim() : '';
+    const loc = typeof e['event-location'] === 'string' ? e['event-location'].trim() : '';
+    const venue = loc ? decodeEntities(loc) : null;
+    return {
+      id: `madrid-${e.id || e.uid || e.link}`,
+      source: 'Agenda Madrid',
+      title: decodeEntities(textOf(e.title)),
+      category: categoryFromType(e['@type']),
+      description: venue ? `Agenda municipal · ${venue}` : 'Agenda municipal de Madrid',
+      date: typeof e.dtstart === 'string' ? e.dtstart.slice(0, 10) : null,
+      time: typeof e.time === 'string' && e.time.trim() ? e.time.trim() : null,
+      free,
+      price: free ? null : priceText || null,
+      venue,
+      url: typeof e.link === 'string' ? e.link : null,
+      image: null,
+      score: scoreByProximity(start, end)
+    };
+  });
+}
+
 // Reparte las noticias en round-robin por fuente para que el feed alterne entre
-// webs (esMadrid / Madrid Secreto / Entradas) en lugar de que domine una sola.
+// webs (esMadrid / Madrid Secreto / Entradas / Agenda Madrid) sin que domine una.
 function interleaveBySource(items) {
   const groups = new Map();
   for (const item of items) {
@@ -257,10 +306,11 @@ function interleaveBySource(items) {
 async function loadItems() {
   if (cache.items.length && Date.now() - cache.at < CACHE_TTL_MS) return cache.items;
 
-  const [esmadridXml, madridsecretoXml, entradasHtml] = await Promise.all([
+  const [esmadridXml, madridsecretoXml, entradasHtml, madridDatosJson] = await Promise.all([
     fetchText(SOURCES.esmadrid).catch(() => null),
     fetchText(SOURCES.madridsecreto).catch(() => null),
-    fetchText(SOURCES.entradas).catch(() => null)
+    fetchText(SOURCES.entradas).catch(() => null),
+    fetchText(SOURCES.madriddatos).catch(() => null)
   ]);
 
   let items = [];
@@ -275,6 +325,7 @@ async function loadItems() {
   collect(esmadridXml, normalizeEsMadrid);
   collect(madridsecretoXml, normalizeMadridSecreto);
   collect(entradasHtml, normalizeEntradas);
+  collect(madridDatosJson, normalizeMadridDatos);
 
   const seen = new Set();
   items = items
